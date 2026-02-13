@@ -288,10 +288,10 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
   if (!currentFile) {
     return (
-      <main className="withmd-bg withmd-page withmd-page-pad-6">
-        <div className="withmd-panel withmd-empty-panel">
-          <h1 className="withmd-title">with.md</h1>
-          <p className="withmd-muted-sm withmd-mt-3">No markdown files available.</p>
+      <main className="withmd-bg withmd-page withmd-loading">
+        <div className="withmd-loading-inner">
+          <h1 className="withmd-loading-title">with.md</h1>
+          <p className="withmd-loading-sub">Loading...</p>
         </div>
       </main>
     );

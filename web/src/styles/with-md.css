@@ -632,10 +632,32 @@
   padding: 2rem;
 }
 
-.withmd-empty-panel {
-  margin: 0 auto;
-  max-width: 48rem;
-  padding: 1.5rem;
+.withmd-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.withmd-loading-inner {
+  background: var(--withmd-panel);
+  padding: 48px;
+}
+
+.withmd-loading-title {
+  margin: 0;
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--withmd-text);
+  letter-spacing: -0.01em;
+}
+
+.withmd-loading-sub {
+  margin: 12px 0 0;
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 17px;
+  font-weight: 300;
+  color: var(--withmd-muted);
 }
 
 .withmd-workspace-grid {
@@ -1085,7 +1107,7 @@
   align-items: center;
   gap: 3px;
   padding: 3px;
-  background: var(--withmd-dock-bg);
+  background: var(--withmd-panel);
 }
 
 .withmd-dock-group {
@@ -1101,7 +1123,7 @@
 .withmd-dock-btn {
   position: relative;
   border: 0;
-  background: var(--withmd-dock-btn-bg);
+  background: transparent;
   color: var(--withmd-text);
   border-radius: 0;
   width: 34px;
