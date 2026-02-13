@@ -108,6 +108,10 @@ export default function DocumentToolbar({
           <PushIcon />
           <span className="withmd-dock-tooltip">Push</span>
         </button>
+        <button type="button" className="withmd-dock-btn" onClick={onDownload} aria-label="Download">
+          <DownloadIcon />
+          <span className="withmd-dock-tooltip">Download</span>
+        </button>
         <button type="button" className="withmd-dock-btn" onClick={cycleBackground} aria-label="Change background">
           <ImageIcon />
           <span className="withmd-dock-tooltip">Background</span>

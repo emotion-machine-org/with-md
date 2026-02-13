@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import * as Y from 'yjs';
 
 import { CommentMark } from '@/components/with-md/tiptap/comment-mark';
+import { TableBlock } from '@/components/with-md/tiptap/table-block';
 
 export function buildEditorExtensions(params: {
   ydoc: Y.Doc;
@@ -16,6 +17,7 @@ export function buildEditorExtensions(params: {
     StarterKit,
     Markdown,
     CommentMark,
+    TableBlock,
   ];
 
   if (!params.enableRealtime || !params.provider) return base;

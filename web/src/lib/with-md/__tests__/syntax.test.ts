@@ -23,11 +23,11 @@ describe('detectUnsupportedSyntax', () => {
     expect(result.reasons).toHaveLength(0);
   });
 
-  it('flags gfm tables as unsupported for rich editor path', () => {
+  it('accepts gfm tables (handled by tableBlock extension)', () => {
     const md = `| A | B |\n|---|---|\n| 1 | 2 |`;
     const result = detectUnsupportedSyntax(md);
-    expect(result.supported).toBe(false);
-    expect(result.reasons).toContain('gfm_table');
+    expect(result.supported).toBe(true);
+    expect(result.reasons).toHaveLength(0);
   });
 
   it('flags mdx/jsx syntax', () => {
