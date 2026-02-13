@@ -26,6 +26,9 @@ export const unpushedCount = query({
 export const pushNow = mutation({
   args: { repoId: v.id('repos') },
   handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.repoId);
+    if (!repo) throw new Error('Repo not found');
+
     const queued = await ctx.db
       .query('pushQueue')
       .withIndex('by_repo_and_status', (q) => q.eq('repoId', args.repoId).eq('status', 'queued'))
@@ -36,8 +39,17 @@ export const pushNow = mutation({
       await ctx.db.patch(item._id, {
         status: 'pushed',
         pushedAt: now,
+        commitSha: item.commitSha ?? `local_${now}`,
       });
     }
+
+    await ctx.db.insert('activities', {
+      repoId: repo._id,
+      actorId: 'local-user',
+      type: 'push_completed',
+      summary: `Push requested for ${repo.owner}/${repo.name} (${queued.length} files)`,
+      createdAt: now,
+    });
 
     return { ok: true, pushed: queued.length };
   },

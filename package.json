@@ -10,5 +10,8 @@
     "dev:web": "npm --workspace web run dev",
     "dev:hocuspocus": "npm --workspace hocuspocus-server run dev",
     "test:web": "npm --workspace web run test"
+  },
+  "dependencies": {
+    "convex": "^1.17.4"
   }
 }

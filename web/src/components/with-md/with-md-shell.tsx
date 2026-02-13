@@ -22,25 +22,32 @@ const api = getWithMdApi();
 
 export default function WithMdShell({ repoId, filePath }: Props) {
   const [repos, setRepos] = useState<RepoSummary[]>([]);
+  const [activeRepoId, setActiveRepoId] = useState('');
   const [files, setFiles] = useState<MdFile[]>([]);
   const [currentFile, setCurrentFile] = useState<MdFile | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [sourceValue, setSourceValue] = useState('');
+  const [savedContent, setSavedContent] = useState('');
   const [isSavingSource, setIsSavingSource] = useState(false);
   const [comments, setComments] = useState<CommentRecord[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-
-  const activeRepoId = repoId ?? repos[0]?.repoId ?? '';
 
   useEffect(() => {
     async function bootstrap() {
       const loadedRepos = await api.listRepos();
       setRepos(loadedRepos);
 
-      const nextRepoId = repoId ?? loadedRepos[0]?.repoId;
-      if (!nextRepoId) return;
+      const selectedRepo = loadedRepos.find((repo) => repo.repoId === repoId) ?? loadedRepos[0];
+      const nextRepoId = selectedRepo?.repoId;
+      if (!nextRepoId) {
+        setActiveRepoId('');
+        setFiles([]);
+        setCurrentFile(null);
+        return;
+      }
+      setActiveRepoId(nextRepoId);
 
       const loadedFiles = await api.listFilesByRepo(nextRepoId);
       setFiles(loadedFiles);
@@ -56,6 +63,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
       if (targetFile) {
         setSourceValue(targetFile.content);
+        setSavedContent(targetFile.content);
         const [loadedComments, loadedActivity] = await Promise.all([
           api.listCommentsByFile(targetFile.mdFileId),
           api.listActivity(nextRepoId),
@@ -71,7 +79,8 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   useEffect(() => {
     if (!currentFile) return;
     setSourceValue(currentFile.content);
-  }, [currentFile]);
+    setSavedContent(currentFile.content);
+  }, [currentFile?.mdFileId]);
 
   const syntaxSupported = currentFile?.syntaxSupportStatus !== 'unsupported';
   const { mode, setMode, canUseEditMode } = useDocMode(syntaxSupported, 'read');
@@ -140,6 +149,30 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     setStatusMessage('Source changes discarded.');
   }, [currentFile]);
 
+  useEffect(() => {
+    if (!currentFile || mode !== 'edit') return;
+    if (currentFile.content === savedContent) return;
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const result = await api.saveSource({
+          mdFileId: currentFile.mdFileId,
+          sourceContent: currentFile.content,
+        });
+        if (result.changed) {
+          setSavedContent(currentFile.content);
+          await reloadActivity();
+        }
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Auto-save failed.');
+      }
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [currentFile, mode, reloadActivity, savedContent]);
+
   const onCreateComment = useCallback(
     async (input: { body: string; textQuote: string; fallbackLine: number }) => {
       if (!currentFile) return;
@@ -205,7 +238,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         <aside className={`withmd-side withmd-side-left ${filesOpen ? 'is-open' : ''}`}>
           <div className="withmd-drawer withmd-drawer-left">
             <div className="withmd-drawer-inner">
-              <FileTree repoId={activeRepoId} files={files} activePath={currentFile.path} />
+              <FileTree repoId={activeRepoId || currentFile.repoId} files={files} activePath={currentFile.path} />
             </div>
           </div>
           <button
@@ -246,6 +279,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   onDiscardSource={onDiscardSource}
                   onEditorContentChange={(next) => {
                     setCurrentFile((prev) => (prev ? { ...prev, content: next } : prev));
+                    setSourceValue(next);
                   }}
                 />
               </div>

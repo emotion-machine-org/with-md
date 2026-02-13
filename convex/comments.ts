@@ -14,16 +14,17 @@ export const listByFile = query({
       .withIndex('by_md_file', (q) => q.eq('mdFileId', args.mdFileId))
       .collect();
 
-    return includeResolved ? rows : rows.filter((c) => !c.resolvedAt);
+    const filtered = includeResolved ? rows : rows.filter((c) => !c.resolvedAt);
+    return filtered.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
   },
 });
 
 export const create = mutation({
   args: {
     mdFileId: v.id('mdFiles'),
-    authorId: v.id('users'),
+    authorId: v.string(),
     body: v.string(),
-    commentMarkId: v.string(),
+    commentMarkId: v.optional(v.string()),
     textQuote: v.optional(v.string()),
     anchorPrefix: v.optional(v.string()),
     anchorSuffix: v.optional(v.string()),
@@ -32,17 +33,34 @@ export const create = mutation({
     parentCommentId: v.optional(v.id('comments')),
   },
   handler: async (ctx, args) => {
+    const file = await ctx.db.get(args.mdFileId);
+    if (!file || file.isDeleted) {
+      throw new Error('Cannot comment on missing or deleted file');
+    }
+
+    const now = Date.now();
     const id = await ctx.db.insert('comments', {
       mdFileId: args.mdFileId,
       authorId: args.authorId,
       body: args.body,
-      commentMarkId: args.commentMarkId,
+      commentMarkId: args.commentMarkId ?? `cmark_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: now,
       textQuote: args.textQuote,
       anchorPrefix: args.anchorPrefix,
       anchorSuffix: args.anchorSuffix,
       anchorHeadingPath: args.anchorHeadingPath,
       fallbackLine: args.fallbackLine,
       parentCommentId: args.parentCommentId,
+    });
+
+    await ctx.db.insert('activities', {
+      repoId: file.repoId,
+      mdFileId: file._id,
+      actorId: args.authorId,
+      type: 'comment_created',
+      summary: `Comment added on ${file.path}`,
+      filePath: file.path,
+      createdAt: now,
     });
 
     return ctx.db.get(id);
@@ -62,7 +80,7 @@ export const update = mutation({
 export const resolve = mutation({
   args: {
     commentId: v.id('comments'),
-    resolvedBy: v.id('users'),
+    resolvedBy: v.string(),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.commentId, {

@@ -1,13 +1,16 @@
+import { ConvexHttpClient } from 'convex/browser';
+
 import { extractHeadingPathAtIndex } from '@/lib/with-md/anchor';
 import { WITH_MD_CONVEX_FUNCTIONS } from '@/lib/with-md/convex-functions';
-import { hasMeaningfulDiff } from '@/lib/with-md/markdown-diff';
 import { detectUnsupportedSyntax } from '@/lib/with-md/syntax';
 import type {
   ActivityItem,
   CommentAnchorSnapshot,
   CommentRecord,
+  FileCategory,
   MdFile,
   RepoSummary,
+  SyntaxSupportStatus,
 } from '@/lib/with-md/types';
 
 interface CreateCommentInput {
@@ -26,6 +29,53 @@ interface SaveSourceInput {
   sourceContent: string;
 }
 
+interface WithMdRepoRow {
+  _id: string;
+  owner: string;
+  name: string;
+}
+
+interface WithMdFileRow {
+  _id: string;
+  repoId: string;
+  path: string;
+  content: string;
+  contentHash: string;
+  fileCategory: string;
+  editHeartbeat?: number;
+  pendingGithubContent?: string;
+  isDeleted?: boolean;
+  deletedAt?: number;
+  syntaxSupportStatus?: string;
+  syntaxSupportReasons?: string[];
+}
+
+interface WithMdCommentRow {
+  _id: string;
+  mdFileId: string;
+  authorId: string;
+  body: string;
+  createdAt?: number;
+  resolvedAt?: number;
+  resolvedBy?: string;
+  parentCommentId?: string;
+  commentMarkId?: string;
+  textQuote?: string;
+  anchorPrefix?: string;
+  anchorSuffix?: string;
+  anchorHeadingPath?: string[];
+  fallbackLine?: number;
+  _creationTime?: number;
+}
+
+interface WithMdActivityRow {
+  _id: string;
+  type: ActivityItem['type'];
+  summary: string;
+  createdAt?: number;
+  _creationTime?: number;
+}
+
 export interface WithMdApi {
   listRepos(): Promise<RepoSummary[]>;
   listFilesByRepo(repoId: string): Promise<MdFile[]>;
@@ -39,203 +89,207 @@ export interface WithMdApi {
   resync(repoId: string): Promise<{ ok: boolean }>;
 }
 
-// Convex-first contract (replace mock implementation with real adapter)
-// Query names:
-// - WITH_MD_CONVEX_FUNCTIONS.queries.*
-// Mutation names:
-// - WITH_MD_CONVEX_FUNCTIONS.mutations.*
-void WITH_MD_CONVEX_FUNCTIONS;
-
-const SAMPLE = `# with.md Architecture Notes
-
-with.md enables markdown collaboration for people and agents.
-
-## Workflow
-
-1. Open file in read mode.
-2. Enter rich edit mode when syntax is supported.
-3. Fall back to source mode when unsupported.
-
-## Comments
-
-Comments are anchored with quote + context + heading path + fallback line.
-`;
-
-const repos: RepoSummary[] = [
-  {
-    repoId: 'repo_withmd',
-    owner: 'emotion-machine',
-    name: 'with-md',
-  },
-];
-
-const files = new Map<string, MdFile>([
-  [
-    'file_docs_plan',
-    buildFile({
-      mdFileId: 'file_docs_plan',
-      repoId: 'repo_withmd',
-      path: 'docs/with-md-architecture.md',
-      content: SAMPLE,
-      fileCategory: 'docs',
-    }),
-  ],
-  [
-    'file_agents',
-    buildFile({
-      mdFileId: 'file_agents',
-      repoId: 'repo_withmd',
-      path: 'AGENTS.md',
-      content: '# AGENTS\n\nAgent instructions here.',
-      fileCategory: 'agent',
-    }),
-  ],
-]);
-
-const commentsByFile = new Map<string, CommentRecord[]>();
-const activityByRepo = new Map<string, ActivityItem[]>();
-
-function buildFile(input: {
-  mdFileId: string;
-  repoId: string;
-  path: string;
-  content: string;
-  fileCategory: MdFile['fileCategory'];
-}): MdFile {
-  const syntax = detectUnsupportedSyntax(input.content);
-  return {
-    mdFileId: input.mdFileId,
-    repoId: input.repoId,
-    path: input.path,
-    content: input.content,
-    contentHash: hashString(input.content),
-    fileCategory: input.fileCategory,
-    isDeleted: false,
-    syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
-    syntaxSupportReasons: syntax.reasons,
-  };
-}
-
-function hashString(value: string): string {
-  let hash = 5381;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash * 33) ^ value.charCodeAt(i);
-  }
-  return `h_${(hash >>> 0).toString(16)}`;
-}
-
 function nowId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function recordActivity(repoId: string, type: ActivityItem['type'], summary: string): void {
-  const list = activityByRepo.get(repoId) ?? [];
-  list.unshift({
-    id: nowId('act'),
-    type,
-    summary,
-    createdAt: Date.now(),
-  });
-  activityByRepo.set(repoId, list.slice(0, 100));
+function normalizeCategory(input: string): FileCategory {
+  const value = input.toLowerCase();
+  if (value === 'readme') return 'readme';
+  if (value === 'prompt') return 'prompt';
+  if (value === 'agent') return 'agent';
+  if (value === 'claude') return 'claude';
+  if (value === 'docs') return 'docs';
+  return 'other';
 }
 
-const mockApi: WithMdApi = {
+function mapRepo(row: WithMdRepoRow): RepoSummary {
+  return {
+    repoId: row._id,
+    owner: row.owner,
+    name: row.name,
+  };
+}
+
+function mapFile(row: WithMdFileRow): MdFile {
+  const syntax: { status: SyntaxSupportStatus; reasons: string[] } = row.syntaxSupportStatus
+    ? {
+        status: row.syntaxSupportStatus === 'supported' || row.syntaxSupportStatus === 'unsupported' ? row.syntaxSupportStatus : 'unknown',
+        reasons: row.syntaxSupportReasons ?? [],
+      }
+    : (() => {
+        const detected = detectUnsupportedSyntax(row.content);
+        return {
+          status: detected.supported ? 'supported' : 'unsupported',
+          reasons: detected.reasons,
+        };
+      })();
+
+  return {
+    mdFileId: row._id,
+    repoId: row.repoId,
+    path: row.path,
+    content: row.content,
+    contentHash: row.contentHash,
+    fileCategory: normalizeCategory(row.fileCategory),
+    editHeartbeat: row.editHeartbeat,
+    pendingGithubContent: row.pendingGithubContent,
+    isDeleted: row.isDeleted,
+    deletedAt: row.deletedAt,
+    syntaxSupportStatus: syntax.status,
+    syntaxSupportReasons: syntax.reasons,
+  };
+}
+
+function mapComment(row: WithMdCommentRow): CommentRecord {
+  const createdAt = row.createdAt ?? row._creationTime ?? Date.now();
+  const anchor: CommentAnchorSnapshot = {
+    commentMarkId: row.commentMarkId ?? nowId('cmark'),
+    textQuote: row.textQuote ?? '',
+    anchorPrefix: row.anchorPrefix ?? '',
+    anchorSuffix: row.anchorSuffix ?? '',
+    anchorHeadingPath: row.anchorHeadingPath ?? [],
+    fallbackLine: row.fallbackLine ?? 1,
+  };
+
+  return {
+    id: row._id,
+    mdFileId: row.mdFileId,
+    authorId: row.authorId,
+    body: row.body,
+    createdAt,
+    resolvedAt: row.resolvedAt,
+    resolvedBy: row.resolvedBy,
+    parentCommentId: row.parentCommentId,
+    anchor,
+  };
+}
+
+function mapActivity(row: WithMdActivityRow): ActivityItem {
+  return {
+    id: row._id,
+    type: row.type,
+    summary: row.summary,
+    createdAt: row.createdAt ?? row._creationTime ?? Date.now(),
+  };
+}
+
+let convexClient: ConvexHttpClient | null = null;
+function getConvexClient(): ConvexHttpClient {
+  if (convexClient) return convexClient;
+
+  const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!url) {
+    throw new Error('Missing NEXT_PUBLIC_CONVEX_URL. Set it in web/.env.local.');
+  }
+
+  convexClient = new ConvexHttpClient(url);
+  return convexClient;
+}
+
+async function queryConvex<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const client = getConvexClient();
+  return (await client.query(name as never, args as never)) as T;
+}
+
+async function mutateConvex<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const client = getConvexClient();
+  return (await client.mutation(name as never, args as never)) as T;
+}
+
+const convexApi: WithMdApi = {
   async listRepos() {
-    return repos;
+    let rows = await queryConvex<WithMdRepoRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.reposList, {});
+    if (rows.length === 0) {
+      await mutateConvex(WITH_MD_CONVEX_FUNCTIONS.mutations.reposEnsureSeedData, {});
+      rows = await queryConvex<WithMdRepoRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.reposList, {});
+    }
+    return rows.map(mapRepo);
   },
 
   async listFilesByRepo(repoId) {
-    return [...files.values()]
-      .filter((f) => f.repoId === repoId && !f.isDeleted)
-      .sort((a, b) => a.path.localeCompare(b.path));
+    const rows = await queryConvex<WithMdFileRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.mdFilesListByRepo, {
+      repoId: repoId as never,
+      includeDeleted: false,
+    });
+    return rows.map(mapFile);
   },
 
   async resolveByPath(repoId, path) {
-    for (const file of files.values()) {
-      if (file.repoId === repoId && file.path === path && !file.isDeleted) return file;
-    }
-    return null;
+    const row = await queryConvex<WithMdFileRow | null>(WITH_MD_CONVEX_FUNCTIONS.queries.mdFilesResolveByPath, {
+      repoId: repoId as never,
+      path,
+    });
+    return row ? mapFile(row) : null;
   },
 
   async getFile(mdFileId) {
-    return files.get(mdFileId) ?? null;
+    const row = await queryConvex<WithMdFileRow | null>(WITH_MD_CONVEX_FUNCTIONS.queries.mdFilesGet, {
+      mdFileId: mdFileId as never,
+    });
+    return row ? mapFile(row) : null;
   },
 
   async listCommentsByFile(mdFileId) {
-    return commentsByFile.get(mdFileId) ?? [];
+    const rows = await queryConvex<WithMdCommentRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.commentsListByFile, {
+      mdFileId: mdFileId as never,
+      includeResolved: true,
+    });
+    return rows.map(mapComment);
   },
 
   async createComment(input) {
-    const file = files.get(input.mdFileId);
+    const file = await this.getFile(input.mdFileId);
     if (!file) throw new Error('File not found');
 
     const firstQuoteIndex = input.textQuote ? file.content.indexOf(input.textQuote) : -1;
     const anchorAt = firstQuoteIndex >= 0 ? firstQuoteIndex : 0;
 
-    const anchor: CommentAnchorSnapshot = {
+    const row = await mutateConvex<WithMdCommentRow>(WITH_MD_CONVEX_FUNCTIONS.mutations.commentsCreate, {
+      mdFileId: input.mdFileId as never,
+      authorId: input.authorId,
+      body: input.body,
       commentMarkId: nowId('cmark'),
       textQuote: input.textQuote,
-      anchorPrefix:
-        input.anchorPrefix ?? file.content.slice(Math.max(0, anchorAt - 32), Math.max(0, anchorAt)),
+      anchorPrefix: input.anchorPrefix ?? file.content.slice(Math.max(0, anchorAt - 32), Math.max(0, anchorAt)),
       anchorSuffix:
         input.anchorSuffix ?? file.content.slice(anchorAt, Math.min(anchorAt + 32, file.content.length)),
       anchorHeadingPath: input.anchorHeadingPath ?? extractHeadingPathAtIndex(file.content, anchorAt),
       fallbackLine: input.fallbackLine,
-    };
+    });
 
-    const comment: CommentRecord = {
-      id: nowId('comment'),
-      mdFileId: input.mdFileId,
-      authorId: input.authorId,
-      body: input.body,
-      createdAt: Date.now(),
-      anchor,
-    };
-
-    const list = commentsByFile.get(input.mdFileId) ?? [];
-    commentsByFile.set(input.mdFileId, [...list, comment]);
-    recordActivity(file.repoId, 'comment_created', `Comment added on ${file.path}`);
-
-    return comment;
+    return mapComment(row);
   },
 
   async saveSource({ mdFileId, sourceContent }) {
-    const file = files.get(mdFileId);
-    if (!file || file.isDeleted) throw new Error('Cannot save deleted or missing file');
-
-    if (!hasMeaningfulDiff(sourceContent, file.content)) {
-      return { changed: false };
-    }
-
-    const syntax = detectUnsupportedSyntax(sourceContent);
-
-    files.set(mdFileId, {
-      ...file,
-      content: sourceContent,
-      contentHash: hashString(sourceContent),
-      syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
-      syntaxSupportReasons: syntax.reasons,
+    return await mutateConvex<{ changed: boolean }>(WITH_MD_CONVEX_FUNCTIONS.mutations.mdFilesSaveSource, {
+      mdFileId: mdFileId as never,
+      sourceContent,
     });
-
-    recordActivity(file.repoId, 'source_saved', `Source saved for ${file.path}`);
-    return { changed: true };
   },
 
   async listActivity(repoId) {
-    return activityByRepo.get(repoId) ?? [];
+    const rows = await queryConvex<WithMdActivityRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.activitiesListByRepo, {
+      repoId: repoId as never,
+    });
+    return rows.map(mapActivity);
   },
 
   async pushNow(repoId) {
-    recordActivity(repoId, 'push_completed', 'Manual push triggered');
-    return { ok: true };
+    const response = await mutateConvex<{ ok?: boolean }>(WITH_MD_CONVEX_FUNCTIONS.mutations.pushQueuePushNow, {
+      repoId: repoId as never,
+    });
+    return { ok: Boolean(response?.ok) };
   },
 
   async resync(repoId) {
-    recordActivity(repoId, 'sync_completed', 'Manual re-sync completed');
-    return { ok: true };
+    const response = await mutateConvex<{ ok?: boolean }>(WITH_MD_CONVEX_FUNCTIONS.mutations.reposResync, {
+      repoId: repoId as never,
+    });
+    return { ok: Boolean(response?.ok) };
   },
 };
 
 export function getWithMdApi(): WithMdApi {
-  return mockApi;
+  return convexApi;
 }

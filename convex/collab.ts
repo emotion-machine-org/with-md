@@ -2,6 +2,7 @@ import { internalMutation, internalQuery, mutation } from './_generated/server';
 import { v } from 'convex/values';
 
 import { hashContent, hasMeaningfulDiff } from './lib/markdownDiff';
+import { detectUnsupportedSyntax } from './lib/syntax';
 
 export const authenticate = internalQuery({
   args: {
@@ -40,15 +41,45 @@ export const storeDocument = internalMutation({
     const file = await ctx.db.get(args.mdFileId);
     if (!file || file.isDeleted) return;
 
+    const now = Date.now();
     if (hasMeaningfulDiff(args.markdownContent, file.content)) {
+      const syntax = detectUnsupportedSyntax(args.markdownContent);
       await ctx.db.patch(file._id, {
         content: args.markdownContent,
         contentHash: hashContent(args.markdownContent),
-        editHeartbeat: Date.now(),
+        editHeartbeat: now,
+        syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+        syntaxSupportReasons: syntax.reasons,
+        pendingGithubContent: args.markdownContent,
+        pendingGithubSha: hashContent(args.markdownContent),
       });
+
+      const queued = await ctx.db
+        .query('pushQueue')
+        .withIndex('by_md_file', (q) => q.eq('mdFileId', file._id))
+        .collect();
+      const pending = queued.find((item) => item.status === 'queued');
+
+      if (pending) {
+        await ctx.db.patch(pending._id, {
+          newContent: args.markdownContent,
+          createdAt: now,
+        });
+      } else {
+        await ctx.db.insert('pushQueue', {
+          repoId: file.repoId,
+          mdFileId: file._id,
+          path: file.path,
+          newContent: args.markdownContent,
+          authorLogins: [],
+          authorEmails: [],
+          status: 'queued',
+          createdAt: now,
+        });
+      }
     } else {
       await ctx.db.patch(file._id, {
-        editHeartbeat: Date.now(),
+        editHeartbeat: now,
       });
     }
 
@@ -67,10 +98,27 @@ export const onAllDisconnected = internalMutation({
     const file = await ctx.db.get(args.mdFileId);
     if (!file || file.isDeleted) return;
 
+    const now = Date.now();
+    const syntax = detectUnsupportedSyntax(args.markdownContent);
+
     await ctx.db.patch(file._id, {
       content: args.markdownContent,
       contentHash: hashContent(args.markdownContent),
-      editHeartbeat: Date.now(),
+      editHeartbeat: now,
+      syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+      syntaxSupportReasons: syntax.reasons,
+      pendingGithubContent: args.markdownContent,
+      pendingGithubSha: hashContent(args.markdownContent),
+    });
+
+    await ctx.db.insert('activities', {
+      repoId: file.repoId,
+      mdFileId: file._id,
+      actorId: 'local-user',
+      type: 'source_saved',
+      summary: `Collaborative edits persisted for ${file.path}`,
+      filePath: file.path,
+      createdAt: now,
     });
 
     // TODO: persist yjsState and process queued suggestions.

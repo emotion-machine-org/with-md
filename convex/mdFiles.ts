@@ -2,6 +2,7 @@ import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
 import { hashContent, hasMeaningfulDiff } from './lib/markdownDiff';
+import { detectUnsupportedSyntax } from './lib/syntax';
 
 export const listByRepo = query({
   args: {
@@ -60,11 +61,17 @@ export const saveSource = mutation({
       return { changed: false };
     }
 
+    const now = Date.now();
+    const syntax = detectUnsupportedSyntax(args.sourceContent);
+
     await ctx.db.patch(args.mdFileId, {
       content: args.sourceContent,
       contentHash: hashContent(args.sourceContent),
       // Source mode is canonical markdown; rich snapshot is stale.
       yjsStateStorageId: undefined,
+      syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+      syntaxSupportReasons: syntax.reasons,
+      lastSyncedAt: now,
     });
 
     await ctx.db.insert('pushQueue', {
@@ -75,7 +82,17 @@ export const saveSource = mutation({
       authorLogins: [],
       authorEmails: [],
       status: 'queued',
-      createdAt: Date.now(),
+      createdAt: now,
+    });
+
+    await ctx.db.insert('activities', {
+      repoId: file.repoId,
+      mdFileId: file._id,
+      actorId: 'local-user',
+      type: 'source_saved',
+      summary: `Source saved for ${file.path}`,
+      filePath: file.path,
+      createdAt: now,
     });
 
     return { changed: true };

@@ -46,11 +46,12 @@ export default defineSchema({
 
   comments: defineTable({
     mdFileId: v.id('mdFiles'),
-    authorId: v.id('users'),
+    authorId: v.string(),
     body: v.string(),
     commentMarkId: v.string(),
+    createdAt: v.number(),
     resolvedAt: v.optional(v.number()),
-    resolvedBy: v.optional(v.id('users')),
+    resolvedBy: v.optional(v.string()),
     parentCommentId: v.optional(v.id('comments')),
     textQuote: v.optional(v.string()),
     anchorPrefix: v.optional(v.string()),
@@ -95,7 +96,7 @@ export default defineSchema({
   activities: defineTable({
     repoId: v.id('repos'),
     mdFileId: v.optional(v.id('mdFiles')),
-    actorId: v.id('users'),
+    actorId: v.string(),
     type: v.string(),
     targetId: v.optional(v.string()),
     summary: v.string(),

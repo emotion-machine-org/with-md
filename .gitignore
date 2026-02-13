@@ -30,3 +30,5 @@ wheels/
 .idea
 
 node_modules/
+
+.env.local

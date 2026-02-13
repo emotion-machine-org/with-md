@@ -19,23 +19,62 @@ Self-contained implementation workspace for with.md (filesystem-first markdown c
 
 ## Run (after installing deps)
 
-### Web
+### 1) Install workspace deps
 
 ```bash
-cd web
+cd with-md
 npm install
+```
+
+### 2) Start Convex
+
+```bash
+cd with-md
+npx convex dev
+```
+
+### 3) Configure env
+
+Set the same shared secret in Convex and Hocuspocus:
+
+```bash
+cd with-md
+npx convex env set HOCUSPOCUS_CONVEX_SECRET "<your-secret>"
+```
+
+`web/.env.local`:
+
+```env
+NEXT_PUBLIC_CONVEX_URL=https://<your-deployment>.convex.cloud
+NEXT_PUBLIC_HOCUSPOCUS_URL=ws://localhost:3001
+NEXT_PUBLIC_WITHMD_ENABLE_REALTIME=1
+```
+
+`hocuspocus-server/.env`:
+
+```env
+CONVEX_URL=https://<your-deployment>.convex.cloud
+HOCUSPOCUS_CONVEX_SECRET=<same-secret-as-above>
+PORT=3001
+```
+
+### 4) Start Hocuspocus
+
+```bash
+cd with-md/hocuspocus-server
 npm run dev
 ```
 
-### Hocuspocus
+### 5) Start web UI
 
 ```bash
-cd hocuspocus-server
-npm install
+cd with-md/web
 npm run dev
 ```
 
 ## Notes
 
 - This workspace is intentionally independent from `/web` and `/server`.
-- Convex integration is represented with function contracts and adapter boundaries.
+- The web app is now bound to Convex (no in-memory mock adapter).
+- On first load, if Convex has no repos, seed data is created automatically.
+- `Push` / `Re-sync` are currently queue/status operations. Wire your Git worker to consume `pushQueue` for full GitHub commits.
