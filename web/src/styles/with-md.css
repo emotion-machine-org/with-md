@@ -210,6 +210,8 @@
   font-size: 17px;
   line-height: 1.58;
   padding-bottom: 3rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .withmd-markdown h1,
@@ -259,10 +261,14 @@
 
 .withmd-markdown p {
   margin: 18px 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .withmd-markdown li {
   margin: 8px 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .withmd-markdown strong,
@@ -317,7 +323,10 @@
   background: var(--withmd-code-block-bg);
   padding: 16px 20px;
   margin: 24px 0;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  white-space: pre;
 }
 
 .withmd-markdown pre code {
@@ -339,6 +348,10 @@
   width: 100%;
   border-collapse: collapse;
   margin: 24px 0;
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
 }
 
 .withmd-markdown th,
@@ -346,6 +359,7 @@
   padding: 10px 14px;
   border-bottom: 1px solid var(--withmd-border);
   text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .withmd-markdown th {
@@ -368,11 +382,61 @@
 
 .withmd-scroll::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 .withmd-scroll::-webkit-scrollbar-thumb {
   background: var(--withmd-glass-scrollbar);
   border-radius: 0;
+}
+
+.withmd-doc-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.withmd-editor-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.withmd-doc-scroll,
+.withmd-editor-scroll,
+.withmd-markdown pre,
+.withmd-markdown table,
+.withmd-prosemirror-wrap .ProseMirror pre,
+.withmd-prosemirror-wrap .ProseMirror table {
+  scrollbar-width: thin;
+  scrollbar-color: var(--withmd-glass-scrollbar) transparent;
+}
+
+.withmd-doc-scroll::-webkit-scrollbar,
+.withmd-editor-scroll::-webkit-scrollbar,
+.withmd-markdown pre::-webkit-scrollbar,
+.withmd-markdown table::-webkit-scrollbar,
+.withmd-prosemirror-wrap .ProseMirror pre::-webkit-scrollbar,
+.withmd-prosemirror-wrap .ProseMirror table::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.withmd-doc-scroll::-webkit-scrollbar-thumb,
+.withmd-editor-scroll::-webkit-scrollbar-thumb,
+.withmd-markdown pre::-webkit-scrollbar-thumb,
+.withmd-markdown table::-webkit-scrollbar-thumb,
+.withmd-prosemirror-wrap .ProseMirror pre::-webkit-scrollbar-thumb,
+.withmd-prosemirror-wrap .ProseMirror table::-webkit-scrollbar-thumb {
+  background: var(--withmd-glass-scrollbar);
+  border-radius: 0;
+}
+
+.withmd-doc-scroll::-webkit-scrollbar-track,
+.withmd-editor-scroll::-webkit-scrollbar-track,
+.withmd-markdown pre::-webkit-scrollbar-track,
+.withmd-markdown table::-webkit-scrollbar-track,
+.withmd-prosemirror-wrap .ProseMirror pre::-webkit-scrollbar-track,
+.withmd-prosemirror-wrap .ProseMirror table::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .withmd-comment-highlight {
@@ -395,6 +459,8 @@
   font-size: 17px;
   line-height: 1.58;
   padding-bottom: 3rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .withmd-prosemirror-wrap .ProseMirror h1,
@@ -444,10 +510,14 @@
 
 .withmd-prosemirror-wrap .ProseMirror p {
   margin: 18px 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .withmd-prosemirror-wrap .ProseMirror li {
   margin: 8px 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .withmd-prosemirror-wrap .ProseMirror strong,
@@ -493,7 +563,10 @@
   background: var(--withmd-code-block-bg);
   padding: 16px 20px;
   margin: 24px 0;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  white-space: pre;
 }
 
 .withmd-prosemirror-wrap .ProseMirror pre code {
@@ -509,6 +582,32 @@
 .withmd-prosemirror-wrap .ProseMirror ol {
   padding-left: 28px;
   margin: 16px 0;
+}
+
+.withmd-prosemirror-wrap .ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 24px 0;
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+}
+
+.withmd-prosemirror-wrap .ProseMirror th,
+.withmd-prosemirror-wrap .ProseMirror td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--withmd-border);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.withmd-prosemirror-wrap .ProseMirror th {
+  color: var(--withmd-text);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .withmd-home-wrap {

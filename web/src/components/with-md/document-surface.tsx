@@ -61,7 +61,7 @@ export default function DocumentSurface({
   }
 
   return (
-    <div className="withmd-fill withmd-scroll">
+    <div className="withmd-fill withmd-doc-scroll">
       <ReadRenderer content={readContent} />
     </div>
   );

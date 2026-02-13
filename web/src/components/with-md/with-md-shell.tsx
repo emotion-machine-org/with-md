@@ -53,7 +53,16 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
       let targetFile: MdFile | null = null;
       if (filePath) {
-        targetFile = await api.resolveByPath(nextRepoId, filePath);
+        targetFile =
+          loadedFiles.find((file) => file.path === filePath) ??
+          (await api.resolveByPath(nextRepoId, filePath));
+        if (!targetFile) {
+          setStatusMessage(
+            loadedFiles[0]
+              ? `Requested path "${filePath}" not found. Showing "${loadedFiles[0].path}".`
+              : `Requested path "${filePath}" not found.`,
+          );
+        }
       }
       if (!targetFile) {
         targetFile = loadedFiles[0] ?? null;

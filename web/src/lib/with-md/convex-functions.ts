@@ -21,6 +21,7 @@ export const WITH_MD_CONVEX_FUNCTIONS = {
     suggestionsReject: 'suggestions:reject',
     reposResync: 'repos:resync',
     reposEnsureSeedData: 'repos:ensureSeedData',
+    reposRestoreFallbackFiles: 'repos:restoreFallbackFiles',
     pushQueuePushNow: 'pushQueue:pushNow',
     activitiesMarkAsRead: 'activities:markAsRead'
   }

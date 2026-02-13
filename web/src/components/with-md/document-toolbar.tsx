@@ -13,6 +13,13 @@ interface Props {
   onResync(): void;
 }
 
+const SYNTAX_REASON_LABELS: Record<string, string> = {
+  mdx_or_embedded_jsx: 'mdx_or_embedded_jsx',
+  frontmatter: 'frontmatter',
+  directives: 'directives',
+  gfm_table: 'gfm_table',
+};
+
 function modeClass(active: boolean): string {
   return active ? 'withmd-dock-btn withmd-dock-btn-active' : 'withmd-dock-btn';
 }
@@ -39,6 +46,8 @@ export default function DocumentToolbar({
   onPush,
   onResync,
 }: Props) {
+  const syntaxLabel = syntaxReasons.map((reason) => SYNTAX_REASON_LABELS[reason] ?? reason).join(', ');
+
   return (
     <header className="withmd-dock-wrap">
       <div className="withmd-dock">
@@ -87,7 +96,7 @@ export default function DocumentToolbar({
 
       {!canUseEditMode && (
         <p className="withmd-warning withmd-mt-2 withmd-dock-note">
-          Rich edit disabled due to unsupported syntax: {syntaxReasons.join(', ')}.
+          Rich edit disabled due to unsupported syntax: {syntaxLabel}.
         </p>
       )}
 

@@ -1,8 +1,132 @@
 import { mutation, query } from './_generated/server';
+import type { MutationCtx } from './_generated/server';
+import type { Id } from './_generated/dataModel';
 import { v } from 'convex/values';
 
 import { hashContent } from './lib/markdownDiff';
 import { detectUnsupportedSyntax } from './lib/syntax';
+import { fallbackSeedFiles } from './seed/fallbackFiles';
+
+async function applyFallbackFiles(ctx: MutationCtx, repoId: Id<'repos'>, overwrite: boolean) {
+  for (const file of fallbackSeedFiles) {
+    const existing = await ctx.db
+      .query('mdFiles')
+      .withIndex('by_repo_and_path', (q) => q.eq('repoId', repoId).eq('path', file.path))
+      .first();
+
+    const syntax = detectUnsupportedSyntax(file.content);
+    if (!existing) {
+      await ctx.db.insert('mdFiles', {
+        repoId,
+        path: file.path,
+        content: file.content,
+        contentHash: hashContent(file.content),
+        lastGithubSha: 'seed',
+        fileCategory: file.fileCategory,
+        sizeBytes: file.content.length,
+        isDeleted: false,
+        lastSyncedAt: Date.now(),
+        syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+        syntaxSupportReasons: syntax.reasons,
+      });
+      continue;
+    }
+
+    if (overwrite) {
+      await ctx.db.patch(existing._id, {
+        content: file.content,
+        contentHash: hashContent(file.content),
+        lastGithubSha: 'seed',
+        fileCategory: file.fileCategory,
+        sizeBytes: file.content.length,
+        isDeleted: false,
+        deletedAt: undefined,
+        lastSyncedAt: Date.now(),
+        syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+        syntaxSupportReasons: syntax.reasons,
+        pendingGithubContent: undefined,
+        pendingGithubSha: undefined,
+        yjsStateStorageId: undefined,
+      });
+      continue;
+    }
+
+    if (existing.isDeleted) {
+      await ctx.db.patch(existing._id, { isDeleted: false, deletedAt: undefined });
+    }
+  }
+}
+
+async function ensureSeedActivity(ctx: MutationCtx, repoId: Id<'repos'>, summary: string) {
+  const existing = await ctx.db
+    .query('activities')
+    .withIndex('by_repo_and_type', (q) => q.eq('repoId', repoId).eq('type', 'sync_completed'))
+    .first();
+  if (existing) return;
+
+  await ctx.db.insert('activities', {
+    repoId,
+    actorId: 'system',
+    type: 'sync_completed',
+    summary,
+    createdAt: Date.now(),
+  });
+}
+
+async function findOrCreateFallbackRepo(ctx: MutationCtx) {
+  const existingRepos = await ctx.db.query('repos').collect();
+  const fallbackRepo = existingRepos.find(
+    (repo) => repo.owner === 'emotion-machine' && repo.name === 'with-md' && repo.githubRepoId === 0,
+  );
+  if (fallbackRepo) return { repoId: fallbackRepo._id, created: false as const };
+
+  if (existingRepos.length > 0) {
+    return { repoId: existingRepos[0]!._id, created: false as const };
+  }
+
+  const installationId = await ctx.db.insert('installations', {
+    githubInstallationId: 0,
+    githubAccountLogin: 'local',
+    githubAccountType: 'User',
+  });
+
+  const repoId = await ctx.db.insert('repos', {
+    installationId,
+    githubRepoId: 0,
+    owner: 'emotion-machine',
+    name: 'with-md',
+    defaultBranch: 'main',
+    syncStatus: 'ready',
+  });
+
+  return { repoId, created: true as const };
+}
+
+export const ensureSeedData = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const { repoId, created } = await findOrCreateFallbackRepo(ctx);
+    await applyFallbackFiles(ctx, repoId, false);
+    await ensureSeedActivity(ctx, repoId, 'Seeded initial markdown files');
+    return { created, repoId };
+  },
+});
+
+export const restoreFallbackFiles = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const { repoId } = await findOrCreateFallbackRepo(ctx);
+    await applyFallbackFiles(ctx, repoId, true);
+    await ctx.db.insert('activities', {
+      repoId,
+      actorId: 'system',
+      type: 'sync_completed',
+      summary: 'Restored fallback markdown files from seed',
+      createdAt: Date.now(),
+    });
+    return { ok: true, repoId };
+  },
+});
 
 export const list = query({
   args: {},
@@ -39,78 +163,5 @@ export const resync = mutation({
     });
 
     return { ok: true };
-  },
-});
-
-export const ensureSeedData = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const existingRepos = await ctx.db.query('repos').collect();
-    if (existingRepos.length > 0) {
-      return { created: false, repoId: existingRepos[0]!._id };
-    }
-
-    const installationId = await ctx.db.insert('installations', {
-      githubInstallationId: 0,
-      githubAccountLogin: 'local',
-      githubAccountType: 'User',
-    });
-
-    const repoId = await ctx.db.insert('repos', {
-      installationId,
-      githubRepoId: 0,
-      owner: 'emotion-machine',
-      name: 'with-md',
-      defaultBranch: 'main',
-      syncStatus: 'ready',
-    });
-
-    const docsFile = `# with.md Architecture Notes
-
-with.md enables markdown collaboration for people and agents.
-
-## Workflow
-
-1. Open file in read mode.
-2. Enter rich edit mode when syntax is supported.
-3. Fall back to source mode when unsupported.
-`;
-
-    const agentsFile = `# AGENTS
-
-Agent instructions here.
-`;
-
-    const seedFiles = [
-      { path: 'docs/with-md-architecture.md', content: docsFile, fileCategory: 'docs' },
-      { path: 'AGENTS.md', content: agentsFile, fileCategory: 'agent' },
-    ];
-
-    for (const file of seedFiles) {
-      const syntax = detectUnsupportedSyntax(file.content);
-      await ctx.db.insert('mdFiles', {
-        repoId,
-        path: file.path,
-        content: file.content,
-        contentHash: hashContent(file.content),
-        lastGithubSha: 'seed',
-        fileCategory: file.fileCategory,
-        sizeBytes: file.content.length,
-        isDeleted: false,
-        lastSyncedAt: Date.now(),
-        syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
-        syntaxSupportReasons: syntax.reasons,
-      });
-    }
-
-    await ctx.db.insert('activities', {
-      repoId,
-      actorId: 'system',
-      type: 'sync_completed',
-      summary: 'Seeded initial markdown files',
-      createdAt: Date.now(),
-    });
-
-    return { created: true, repoId };
   },
 });

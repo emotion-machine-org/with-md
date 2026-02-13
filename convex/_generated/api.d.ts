@@ -17,6 +17,7 @@ import type * as lib_syntax from "../lib/syntax.js";
 import type * as mdFiles from "../mdFiles.js";
 import type * as pushQueue from "../pushQueue.js";
 import type * as repos from "../repos.js";
+import type * as seed_fallbackFiles from "../seed/fallbackFiles.js";
 import type * as suggestions from "../suggestions.js";
 
 import type {
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   mdFiles: typeof mdFiles;
   pushQueue: typeof pushQueue;
   repos: typeof repos;
+  "seed/fallbackFiles": typeof seed_fallbackFiles;
   suggestions: typeof suggestions;
 }>;
 

@@ -112,18 +112,12 @@ function mapRepo(row: WithMdRepoRow): RepoSummary {
 }
 
 function mapFile(row: WithMdFileRow): MdFile {
-  const syntax: { status: SyntaxSupportStatus; reasons: string[] } = row.syntaxSupportStatus
-    ? {
-        status: row.syntaxSupportStatus === 'supported' || row.syntaxSupportStatus === 'unsupported' ? row.syntaxSupportStatus : 'unknown',
-        reasons: row.syntaxSupportReasons ?? [],
-      }
-    : (() => {
-        const detected = detectUnsupportedSyntax(row.content);
-        return {
-          status: detected.supported ? 'supported' : 'unsupported',
-          reasons: detected.reasons,
-        };
-      })();
+  // Recompute from live content to avoid stale backend flags locking files in unsupported mode.
+  const detected = detectUnsupportedSyntax(row.content);
+  const syntax: { status: SyntaxSupportStatus; reasons: string[] } = {
+    status: detected.supported ? 'supported' : 'unsupported',
+    reasons: detected.reasons,
+  };
 
   return {
     mdFileId: row._id,
@@ -199,11 +193,9 @@ async function mutateConvex<T>(name: string, args: Record<string, unknown>): Pro
 
 const convexApi: WithMdApi = {
   async listRepos() {
-    let rows = await queryConvex<WithMdRepoRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.reposList, {});
-    if (rows.length === 0) {
-      await mutateConvex(WITH_MD_CONVEX_FUNCTIONS.mutations.reposEnsureSeedData, {});
-      rows = await queryConvex<WithMdRepoRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.reposList, {});
-    }
+    // Idempotent: ensures fallback repo/files exist without overwriting user-edited files.
+    await mutateConvex(WITH_MD_CONVEX_FUNCTIONS.mutations.reposEnsureSeedData, {});
+    const rows = await queryConvex<WithMdRepoRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.reposList, {});
     return rows.map(mapRepo);
   },
 
