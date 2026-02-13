@@ -1,5 +1,5 @@
 :root {
-  --withmd-bg-overlay: rgba(8, 12, 14, 0.68);
+  --withmd-bg-overlay: transparent;
   --withmd-panel: #0f0f0e;
   --withmd-drawer: #0f0f0e;
   --withmd-drawer-section: #0f0f0e;
@@ -8,6 +8,72 @@
   --withmd-muted: rgba(168, 162, 158, 0.58);
   --withmd-border: #292524;
   --withmd-comment: #373737;
+  --withmd-glass-bg: rgba(255, 255, 255, 0.08);
+  --withmd-glass-bg-hover: rgba(255, 255, 255, 0.14);
+  --withmd-glass-bg-active: rgba(255, 255, 255, 0.20);
+  --withmd-glass-border: rgba(255, 255, 255, 0.20);
+  --withmd-glass-subtle: rgba(255, 255, 255, 0.04);
+  --withmd-glass-code: rgba(255, 255, 255, 0.06);
+  --withmd-glass-scrollbar: rgba(255, 255, 255, 0.16);
+  --withmd-code-block-bg: rgba(0, 0, 0, 0.4);
+  --withmd-dock-bg: rgba(15, 15, 14, 0.94);
+  --withmd-dock-meta-bg: rgba(10, 10, 9, 0.78);
+  --withmd-dock-note-bg: rgba(42, 24, 8, 0.84);
+  --withmd-dock-divider: rgba(255, 255, 255, 0.18);
+  --withmd-dock-btn-bg: rgba(255, 255, 255, 0.13);
+  --withmd-dock-btn-hover: rgba(255, 255, 255, 0.18);
+  --withmd-dock-btn-active: rgba(255, 255, 255, 0.24);
+  --withmd-dock-btn-primary: rgba(255, 209, 102, 0.22);
+  --withmd-primary-bg: rgba(255, 209, 102, 0.16);
+  --withmd-primary-border: rgba(255, 209, 102, 0.4);
+  --withmd-warning-color: #ffe1aa;
+  --withmd-status-color: rgba(248, 250, 252, 0.9);
+  --withmd-toggle-color: rgba(245, 245, 244, 0.85);
+  --withmd-filetree-color: rgba(168, 162, 158, 0.72);
+  --withmd-filetree-hover-bg: rgba(255, 255, 255, 0.06);
+  --withmd-filetree-hover-color: rgba(245, 245, 244, 0.88);
+  --withmd-filetree-active-bg: rgba(255, 255, 255, 0.10);
+  --withmd-filetree-active-color: rgba(245, 245, 244, 0.96);
+  --withmd-filetree-dir-color: rgba(214, 211, 209, 0.78);
+}
+
+[data-theme="light"] {
+  --withmd-bg-overlay: transparent;
+  --withmd-panel: #faf9f7;
+  --withmd-drawer: #f5f4f2;
+  --withmd-drawer-section: #f5f4f2;
+  --withmd-text: #1c1917;
+  --withmd-body: #57534e;
+  --withmd-muted: rgba(87, 83, 78, 0.58);
+  --withmd-border: #e7e5e4;
+  --withmd-comment: #e7e5e4;
+  --withmd-glass-bg: rgba(0, 0, 0, 0.04);
+  --withmd-glass-bg-hover: rgba(0, 0, 0, 0.08);
+  --withmd-glass-bg-active: rgba(0, 0, 0, 0.12);
+  --withmd-glass-border: rgba(0, 0, 0, 0.12);
+  --withmd-glass-subtle: rgba(0, 0, 0, 0.02);
+  --withmd-glass-code: rgba(0, 0, 0, 0.04);
+  --withmd-glass-scrollbar: rgba(0, 0, 0, 0.12);
+  --withmd-code-block-bg: rgba(0, 0, 0, 0.04);
+  --withmd-dock-bg: rgba(250, 249, 247, 0.96);
+  --withmd-dock-meta-bg: rgba(245, 244, 242, 0.88);
+  --withmd-dock-note-bg: rgba(255, 243, 224, 0.92);
+  --withmd-dock-divider: rgba(0, 0, 0, 0.12);
+  --withmd-dock-btn-bg: rgba(0, 0, 0, 0.06);
+  --withmd-dock-btn-hover: rgba(0, 0, 0, 0.10);
+  --withmd-dock-btn-active: rgba(0, 0, 0, 0.14);
+  --withmd-dock-btn-primary: rgba(180, 130, 40, 0.14);
+  --withmd-primary-bg: rgba(180, 130, 40, 0.10);
+  --withmd-primary-border: rgba(180, 130, 40, 0.30);
+  --withmd-warning-color: #92400e;
+  --withmd-status-color: rgba(28, 25, 23, 0.85);
+  --withmd-toggle-color: rgba(28, 25, 23, 0.85);
+  --withmd-filetree-color: rgba(87, 83, 78, 0.72);
+  --withmd-filetree-hover-bg: rgba(0, 0, 0, 0.04);
+  --withmd-filetree-hover-color: rgba(28, 25, 23, 0.88);
+  --withmd-filetree-active-bg: rgba(0, 0, 0, 0.08);
+  --withmd-filetree-active-color: rgba(28, 25, 23, 0.96);
+  --withmd-filetree-dir-color: rgba(68, 64, 60, 0.78);
 }
 
 .withmd-bg {
@@ -57,8 +123,8 @@
 }
 
 .withmd-btn {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--withmd-glass-border);
+  background: var(--withmd-glass-bg);
   color: var(--withmd-text);
   border-radius: 0;
   padding: 9px 14px;
@@ -70,7 +136,7 @@
 }
 
 .withmd-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--withmd-glass-bg-hover);
 }
 
 .withmd-btn:disabled {
@@ -79,12 +145,12 @@
 }
 
 .withmd-btn-active {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--withmd-glass-bg-active);
 }
 
 .withmd-btn-primary {
-  background: rgba(255, 209, 102, 0.16);
-  border-color: rgba(255, 209, 102, 0.4);
+  background: var(--withmd-primary-bg);
+  border-color: var(--withmd-primary-border);
 }
 
 .withmd-source-editor {
@@ -106,16 +172,30 @@
 .withmd-comment-input {
   width: 100%;
   border: 0;
+  border-bottom: 1px solid var(--withmd-border);
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
   color: var(--withmd-text);
-  padding: 10px;
-  font-size: 13px;
+  padding: 8px 0;
+  font-size: 14px;
   font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  outline: none;
+  transition: border-color 200ms ease;
+}
+
+.withmd-inline-input::placeholder,
+.withmd-comment-input::placeholder {
+  color: var(--withmd-muted);
+}
+
+.withmd-inline-input:focus,
+.withmd-comment-input:focus {
+  border-bottom-color: var(--withmd-body);
 }
 
 .withmd-comment-input {
-  min-height: 86px;
+  min-height: 64px;
+  resize: none;
 }
 
 .withmd-markdown {
@@ -217,7 +297,7 @@
 }
 
 .withmd-markdown code {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--withmd-glass-code);
   padding: 2px 6px;
   border-radius: 2px;
   font-size: 0.88em;
@@ -228,7 +308,7 @@
 .withmd-markdown pre {
   border: 0;
   border-radius: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--withmd-code-block-bg);
   padding: 16px 20px;
   margin: 24px 0;
   overflow: auto;
@@ -285,7 +365,7 @@
 }
 
 .withmd-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--withmd-glass-scrollbar);
   border-radius: 0;
 }
 
@@ -393,7 +473,7 @@
 }
 
 .withmd-prosemirror-wrap .ProseMirror code {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--withmd-glass-code);
   padding: 2px 6px;
   border-radius: 2px;
   font-size: 0.88em;
@@ -404,7 +484,7 @@
 .withmd-prosemirror-wrap .ProseMirror pre {
   border: 0;
   border-radius: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--withmd-code-block-bg);
   padding: 16px 20px;
   margin: 24px 0;
   overflow: auto;
@@ -530,7 +610,7 @@
 
 .withmd-warning {
   font-size: 13px;
-  color: #ffe1aa;
+  color: var(--withmd-warning-color);
 }
 
 .withmd-body-sm {
@@ -561,28 +641,28 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: rgba(168, 162, 158, 0.72);
+  color: var(--withmd-filetree-color);
   font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   text-align: left;
   cursor: pointer;
 }
 
 .withmd-filetree-row:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(245, 245, 244, 0.88);
+  background: var(--withmd-filetree-hover-bg);
+  color: var(--withmd-filetree-hover-color);
 }
 
 .withmd-filetree-row-active {
-  background: rgba(255, 255, 255, 0.10);
-  color: rgba(245, 245, 244, 0.96);
+  background: var(--withmd-filetree-active-bg);
+  color: var(--withmd-filetree-active-color);
 }
 
 .withmd-filetree-dir {
-  color: rgba(214, 211, 209, 0.78);
+  color: var(--withmd-filetree-dir-color);
 }
 
 .withmd-filetree-file {
-  color: rgba(168, 162, 158, 0.72);
+  color: var(--withmd-filetree-color);
 }
 
 .withmd-filetree-caret {
@@ -713,7 +793,7 @@
   min-height: 160px;
   border: 0;
   background: var(--withmd-drawer-section);
-  color: rgba(245, 245, 244, 0.85);
+  color: var(--withmd-toggle-color);
   writing-mode: vertical-rl;
   text-orientation: mixed;
   font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -755,42 +835,44 @@
 .withmd-dock {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px;
-  background: rgba(15, 15, 14, 0.94);
+  gap: 4px;
+  padding: 4px;
+  background: var(--withmd-dock-bg);
 }
 
 .withmd-dock-divider {
-  width: 1px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.18);
+  display: none;
 }
 
 .withmd-dock-btn {
+  position: relative;
   border: 0;
-  background: rgba(255, 255, 255, 0.13);
+  background: var(--withmd-dock-btn-bg);
   color: var(--withmd-text);
   border-radius: 0;
-  padding: 9px 14px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   font-size: 13px;
   line-height: 1;
   font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   cursor: pointer;
 }
 
 .withmd-dock-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   fill: currentColor;
   opacity: 0.88;
+  flex-shrink: 0;
 }
 
 .withmd-dock-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--withmd-dock-btn-hover);
 }
 
 .withmd-dock-btn:disabled {
@@ -799,28 +881,70 @@
 }
 
 .withmd-dock-btn-active {
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--withmd-dock-btn-active);
 }
 
 .withmd-dock-btn-primary {
-  background: rgba(255, 209, 102, 0.22);
+  background: var(--withmd-dock-btn-primary);
+}
+
+.withmd-dock-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--withmd-dock-bg);
+  color: var(--withmd-text);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 4px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  z-index: 10;
+}
+
+.withmd-dock-btn:hover .withmd-dock-tooltip {
+  opacity: 1;
+}
+
+.withmd-dock-btn:disabled:hover .withmd-dock-tooltip {
+  opacity: 0;
+}
+
+.withmd-icon-moon {
+  display: none;
+}
+
+[data-theme="light"] .withmd-icon-sun {
+  display: none;
+}
+
+[data-theme="light"] .withmd-icon-moon {
+  display: block;
+}
+
+.withmd-dock-gap {
+  width: 4px;
 }
 
 .withmd-dock-meta {
   max-width: 100%;
-  background: rgba(10, 10, 9, 0.78);
-  padding: 5px 9px;
+  background: var(--withmd-dock-meta-bg);
+  padding: 4px 8px;
 }
 
 .withmd-dock-status {
   margin-left: 10px;
-  color: rgba(248, 250, 252, 0.9);
+  color: var(--withmd-status-color);
 }
 
 .withmd-dock-note {
   margin: 0;
   max-width: 480px;
-  background: rgba(42, 24, 8, 0.84);
+  background: var(--withmd-dock-note-bg);
   padding: 5px 9px;
 }
 

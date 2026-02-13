@@ -17,6 +17,18 @@ function modeClass(active: boolean): string {
   return active ? 'withmd-dock-btn withmd-dock-btn-active' : 'withmd-dock-btn';
 }
 
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  html.setAttribute('data-theme', next);
+  try {
+    localStorage.setItem('withmd-theme', next);
+  } catch (e) {
+    /* noop */
+  }
+}
+
 export default function DocumentToolbar({
   mode,
   canUseEditMode,
@@ -30,38 +42,47 @@ export default function DocumentToolbar({
   return (
     <header className="withmd-dock-wrap">
       <div className="withmd-dock">
-        <div className="withmd-row withmd-gap-2">
-          <button type="button" className={modeClass(mode === 'read')} onClick={() => onModeChange('read')}>
+        <div className="withmd-row" style={{ gap: 2 }}>
+          <button type="button" className={modeClass(mode === 'read')} onClick={() => onModeChange('read')} aria-label="Read">
             <ReadIcon />
-            <span>Read</span>
+            <span className="withmd-dock-tooltip">Read</span>
           </button>
           <button
             type="button"
             className={modeClass(mode === 'edit')}
             onClick={() => onModeChange('edit')}
             disabled={!canUseEditMode}
+            aria-label="Edit"
           >
             <EditIcon />
-            <span>Edit</span>
+            <span className="withmd-dock-tooltip">Edit</span>
           </button>
-          <button type="button" className={modeClass(mode === 'source')} onClick={() => onModeChange('source')}>
+          <button type="button" className={modeClass(mode === 'source')} onClick={() => onModeChange('source')} aria-label="Source">
             <CodeIcon />
-            <span>Source</span>
+            <span className="withmd-dock-tooltip">Source</span>
           </button>
         </div>
 
-        <span className="withmd-dock-divider" />
+        <span className="withmd-dock-gap" />
 
-        <div className="withmd-row withmd-gap-2">
-          <button type="button" className="withmd-dock-btn" onClick={onResync}>
+        <div className="withmd-row" style={{ gap: 2 }}>
+          <button type="button" className="withmd-dock-btn" onClick={onResync} aria-label="Re-sync">
             <SyncIcon />
-            Re-sync
+            <span className="withmd-dock-tooltip">Re-sync</span>
           </button>
-          <button type="button" className="withmd-dock-btn withmd-dock-btn-primary" onClick={onPush}>
+          <button type="button" className="withmd-dock-btn withmd-dock-btn-primary" onClick={onPush} aria-label="Push">
             <PushIcon />
-            Push to GitHub
+            <span className="withmd-dock-tooltip">Push</span>
           </button>
         </div>
+
+        <span className="withmd-dock-gap" />
+
+        <button type="button" className="withmd-dock-btn" onClick={toggleTheme} aria-label="Toggle theme">
+          <SunIcon />
+          <MoonIcon />
+          <span className="withmd-dock-tooltip">Theme</span>
+        </button>
       </div>
 
       {!canUseEditMode && (
@@ -115,6 +136,22 @@ function PushIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 3 7 8h3v6h4V8h3l-5-5zm-7 14v4h14v-4h2v6H3v-6h2z" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg className="withmd-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-2a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11 1h2v3h-2V1zm0 19h2v3h-2v-3zM3.515 4.929l1.414-1.414L7.05 5.636 5.636 7.05 3.515 4.93zM16.95 18.364l1.414-1.414 2.121 2.121-1.414 1.414-2.121-2.121zm2.121-14.85 1.414 1.415-2.121 2.121-1.414-1.414 2.121-2.121zM5.636 16.95l1.414 1.414-2.121 2.121-1.414-1.414 2.121-2.121zM23 11v2h-3v-2h3zM4 11v2H1v-2h3z" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg className="withmd-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M10 7a7 7 0 0 0 12 4.9v.1c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2h.1A6.98 6.98 0 0 0 10 7zm-6 5a8 8 0 0 0 15.062 3.762A9 9 0 0 1 8.238 4.938 7.999 7.999 0 0 0 4 12z" />
     </svg>
   );
 }

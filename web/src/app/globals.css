@@ -85,3 +85,8 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+[data-theme="light"] body {
+  background: #f5f4f2;
+  color: #1c1917;
+}

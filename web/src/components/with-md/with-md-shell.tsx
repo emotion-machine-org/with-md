@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import ActivityPanel from '@/components/with-md/activity-panel';
 import CommentsSidebar from '@/components/with-md/comments-sidebar';
 import DocumentSurface from '@/components/with-md/document-surface';
 import DocumentToolbar from '@/components/with-md/document-toolbar';
@@ -298,7 +297,6 @@ export default function WithMdShell({ repoId, filePath }: Props) {
           <div className="withmd-drawer withmd-drawer-right">
             <div className="withmd-drawer-inner withmd-column withmd-gap-3">
               <CommentsSidebar comments={comments} anchorByCommentId={anchorMap} onCreate={onCreateComment} />
-              <ActivityPanel activity={activity} />
             </div>
           </div>
         </aside>
