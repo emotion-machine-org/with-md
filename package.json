@@ -1,0 +1,14 @@
+{
+  "name": "with-md-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "web",
+    "hocuspocus-server"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace web run dev",
+    "dev:hocuspocus": "npm --workspace hocuspocus-server run dev",
+    "test:web": "npm --workspace web run test"
+  }
+}

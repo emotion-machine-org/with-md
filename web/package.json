@@ -1,0 +1,36 @@
+{
+  "name": "with-md-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4040",
+    "build": "next build",
+    "start": "next start -p 4040",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@hocuspocus/provider": "^2.13.6",
+    "@tiptap/core": "^3.0.0",
+    "@tiptap/extension-collaboration": "^3.0.0",
+    "@tiptap/extension-collaboration-cursor": "^3.0.0",
+    "@tiptap/markdown": "^3.0.0",
+    "@tiptap/react": "^3.0.0",
+    "@tiptap/starter-kit": "^3.0.0",
+    "convex": "^1.17.4",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.0.1",
+    "remark-gfm": "^4.0.1",
+    "y-indexeddb": "^9.0.12",
+    "yjs": "^13.6.24"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.4"
+  }
+}

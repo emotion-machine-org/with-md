@@ -285,6 +285,7 @@ export default defineSchema({
     fileCategory: v.string(),
     sizeBytes: v.number(),
     isDeleted: v.boolean(),
+    deletedAt: v.optional(v.number()),
     lastSyncedAt: v.number(),
     // CRDT persistence (Yjs binary state stored as blob)
     yjsStateStorageId: v.optional(v.id("_storage")),
@@ -293,6 +294,9 @@ export default defineSchema({
     // Deferred GitHub changes
     pendingGithubContent: v.optional(v.string()),
     pendingGithubSha: v.optional(v.string()),
+    // Parser compatibility status for UI mode gating
+    syntaxSupportStatus: v.optional(v.string()), // "unknown" | "supported" | "unsupported"
+    syntaxSupportReasons: v.optional(v.array(v.string())),
   })
     .index("by_repo_and_path", ["repoId", "path"])
     .index("by_repo_and_category", ["repoId", "fileCategory"])
@@ -308,6 +312,11 @@ export default defineSchema({
     resolvedAt: v.optional(v.number()),
     resolvedBy: v.optional(v.id("users")),
     parentCommentId: v.optional(v.id("comments")),
+    // Approximate re-anchoring metadata (used when CRDT mark is unavailable)
+    textQuote: v.optional(v.string()),
+    anchorPrefix: v.optional(v.string()),
+    anchorSuffix: v.optional(v.string()),
+    anchorHeadingPath: v.optional(v.array(v.string())),
     // Fallback: absolute line number at creation time (used if CRDT state is unavailable)
     fallbackLine: v.optional(v.number()),
   })
@@ -385,6 +394,7 @@ Comments no longer use Yjs RelativePositions stored in Convex. Instead, comment 
 
 - When someone adds a comment, a `commentMark` is applied to the selected text range within the editor. This mark is part of the CRDT document and syncs to all users automatically.
 - The Convex `comments` table stores the **metadata** (author, body, resolved status, thread) and links to the mark via `commentMarkId`.
+- The same record stores **approximate recovery metadata** (`textQuote`, `anchorPrefix`, `anchorSuffix`, `anchorHeadingPath`, `fallbackLine`) so comments can be reattached if CRDT marks are unavailable.
 - The mark survives edits natively — if someone inserts text before the commented region, the mark moves with the text because ProseMirror/Yjs handles this.
 - When all editors disconnect and Hocuspocus persists the document, the comment marks are part of the serialized Yjs state.
 
@@ -558,14 +568,20 @@ Same as v4 — unchanged by the editor choice:
 GitHub push event arrives:
   1. Validate HMAC-SHA256 signature
   2. Extract changed .md file paths
-  3. For each changed .md file:
+3. For each changed .md file:
      a. Is file actively being edited? (editHeartbeat fresh)
         YES → store in pendingGithubContent/pendingGithubSha, show banner
         NO  → upsert mdFile.content (raw markdown), update contentHash/lastGithubSha
               Delete yjsStateStorageId (stale — next editor open will re-bootstrap)
-  4. For removed files: set isDeleted = true
+  4. For removed files: set isDeleted = true, set deletedAt = now, clear yjsStateStorageId
+     (keep row as tombstone; do not hard-delete to avoid orphaned references)
   5. Update repo.lastSyncedCommitSha
 ```
+
+**Tombstone behavior**:
+- `mdFileId` is stable for history/comments/suggestions/activity.
+- Normal file tree queries exclude `isDeleted = true`.
+- If the same `repoId + path` reappears later, revive the same row (`isDeleted = false`, clear `deletedAt`) instead of creating a new file ID.
 
 ### 6.2 Deferred change resolution
 
@@ -589,6 +605,23 @@ User clicks "Push to GitHub":
 
 Same as v4. Full tree scan via GitHub Trees API.
 
+### 6.5 Source mode save path (explicit mutation)
+
+Source mode is first-class and editable. It needs a direct Convex mutation path that does not require a live Hocuspocus session:
+
+```
+User clicks "Save Source":
+  1. Mutation mdFiles.saveSource(mdFileId, sourceContent) validates access + file not deleted
+  2. If sourceContent differs meaningfully from mdFile.content:
+       patch mdFile.content/contentHash
+       clear yjsStateStorageId (stale rich-text snapshot)
+       enqueue pushQueue item
+       create activity "source_saved"
+  3. If no meaningful diff: no-op
+```
+
+This keeps Source mode deterministic and avoids hidden two-writer conflicts between TipTap and raw markdown editing.
+
 ---
 
 ## 7. Comments
@@ -609,6 +642,7 @@ Comments have two parts:
      .run()
 3. Frontend calls Convex mutation comments.create with:
    - mdFileId, body, commentMarkId, authorId
+   - textQuote, anchorPrefix, anchorSuffix, anchorHeadingPath
    - fallbackLine (current line number, for display when CRDT unavailable)
 4. Mark syncs to all editors via Yjs (immediate)
 5. Comment metadata appears in sidebar via Convex reactive query
@@ -617,7 +651,8 @@ Comments have two parts:
 ### 7.3 Displaying comments
 
 In Phase 1 (read-only view, no Hocuspocus):
-- Comments are displayed in the sidebar, positioned by `fallbackLine`
+- Comments are displayed in the sidebar, positioned by best-known approximation:
+  `textQuote/context` > `headingPath` > `fallbackLine`
 - No highlight on the text (can't resolve mark positions without CRDT)
 
 In Phase 2 (TipTap active):
@@ -637,11 +672,14 @@ Delete: remove Convex record + remove mark from TipTap document:
 
 When nobody has the file open and the Yjs state was deleted (after a GitHub sync), comment marks are gone. The Convex records still exist with `fallbackLine`. Next time someone opens the editor and the Yjs doc is bootstrapped from markdown, the comment marks won't be present.
 
-**Solution**: when bootstrapping from markdown, re-apply comment marks based on `fallbackLine`:
+**Solution**: when bootstrapping from markdown, re-apply comment marks with a ranked strategy:
 - Load all unresolved comments for this file from Convex
-- For each, find `fallbackLine` in the fresh document
+- For each, try `textQuote` exact match first
+- If ambiguous/missing, score matches by `anchorPrefix + anchorSuffix`
+- If still missing, constrain by `anchorHeadingPath`
+- Fallback to `fallbackLine` last
 - Re-apply the comment mark at that line
-- This is approximate (line may have shifted) but better than losing all comments
+- This is approximate but better than losing all comments
 
 **Better long-term**: preserve Yjs state more aggressively (don't delete on GitHub sync unless content actually changed).
 
@@ -800,6 +838,7 @@ Before launching, run a test suite:
 | `repos.get` | Single repo with sync status |
 | `mdFiles.listByRepo` | Files with optional category filter |
 | `mdFiles.get` | Single file with content + edit status |
+| `mdFiles.resolveByPath` | Resolve `repoId + path` to active `mdFileId` |
 | `mdFiles.getFileTree` | Path/category/ID list for tree view |
 | `comments.listByFile` | Comments with author info, threaded |
 | `suggestions.listByFile` | Suggestions with status filter |
@@ -816,6 +855,7 @@ Before launching, run a test suite:
 | `comments.update` | Edit body |
 | `comments.resolve` | Resolve thread |
 | `comments.delete` | Delete + remove mark from doc |
+| `mdFiles.saveSource` | Persist raw markdown from Source mode; invalidate stale Yjs state |
 | `suggestions.create` | Propose text replacement |
 | `suggestions.accept` | Accept → apply or queue |
 | `suggestions.reject` | Reject |
@@ -945,7 +985,7 @@ All failure scenarios from v4 still apply. TipTap-specific additions:
 
 **Impact**: Content loss on first edit.
 
-**Mitigation**: Before loading into TipTap, validate the round-trip. If `parse(file) → serialize()` loses content, show a warning: "This file contains unsupported syntax. Some formatting may be simplified." Let the user choose to proceed or open on GitHub instead. Long-term: add custom TipTap extensions for common non-standard syntax (frontmatter, MDX, admonitions).
+**Mitigation**: Before loading into TipTap, validate the round-trip. If `parse(file) → serialize()` loses content, mark file `syntaxSupportStatus = "unsupported"` and force Source mode in UI. Show warning: "This file contains unsupported syntax. Opened in Source mode to avoid content loss." Long-term: add custom TipTap extensions for common non-standard syntax (frontmatter, MDX, admonitions).
 
 ### F13: Peritext anomaly in Yjs rich text
 
@@ -961,7 +1001,7 @@ All failure scenarios from v4 still apply. TipTap-specific additions:
 
 **What happens**: GitHub content changes while nobody is editing. Yjs state is deleted (stale). Comment marks (which lived in the Yjs doc) are gone.
 
-**Impact**: Comments lose their position anchoring. Fall back to `fallbackLine`.
+**Impact**: Comments lose exact CRDT anchoring. Fall back to approximate matching (`textQuote/context/heading/line`).
 
 **Mitigation**: Re-apply comment marks when bootstrapping from markdown (see Section 7.5). Long-term: don't delete Yjs state unless the content actually changed — compute a diff and apply it to the existing Yjs doc instead of resetting.
 

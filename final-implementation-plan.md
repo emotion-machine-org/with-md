@@ -103,33 +103,34 @@ Frontend only depends on explicit backend contracts:
 No frontend assumptions about git internals.
 
 ## 6. Backend Contract (Frontend-facing)
-Define/confirm these endpoints before implementation:
+Use Convex functions directly in the web app (HTTP only for Hocuspocus hooks):
 
 ```ts
-// file fetch
-GET /api/with-md/repos/:repoId/files/:fileId
-// returns: { mdFileId, path, content, contentHash, fileCategory, editHeartbeat, ... }
+// Queries
+repos.list()
+repos.get({ repoId })
+mdFiles.listByRepo({ repoId, includeDeleted: false })
+mdFiles.get({ mdFileId })
+mdFiles.resolveByPath({ repoId, path })
+comments.listByFile({ mdFileId })
+suggestions.listByFile({ mdFileId })
+activities.listByRepo({ repoId, cursor? })
+pushQueue.unpushedCount({ repoId })
 
-// comments
-GET    /api/with-md/files/:mdFileId/comments
-POST   /api/with-md/files/:mdFileId/comments
-PATCH  /api/with-md/comments/:commentId
-DELETE /api/with-md/comments/:commentId
+// Mutations
+comments.create({ mdFileId, body, commentMarkId, textQuote, anchorPrefix, anchorSuffix, anchorHeadingPath, fallbackLine })
+comments.update({ commentId, body })
+comments.resolve({ commentId })
+comments.delete({ commentId, commentMarkId, mdFileId })
+mdFiles.saveSource({ mdFileId, sourceContent })
+suggestions.create({ mdFileId, originalText, suggestedText, baseContentHash })
+suggestions.accept({ suggestionId })
+suggestions.reject({ suggestionId })
+repos.resync({ repoId })
+pushQueue.pushNow({ repoId })
+activities.markAsRead({ repoId })
 
-// suggestions
-GET  /api/with-md/files/:mdFileId/suggestions
-POST /api/with-md/files/:mdFileId/suggestions
-POST /api/with-md/suggestions/:id/accept
-POST /api/with-md/suggestions/:id/reject
-
-// activity
-GET /api/with-md/repos/:repoId/activity
-
-// git ops
-POST /api/with-md/repos/:repoId/push
-POST /api/with-md/repos/:repoId/resync
-
-// collab for Hocuspocus
+// Hocuspocus HTTP hooks (internal)
 POST /api/collab/authenticate
 POST /api/collab/loadDocument
 POST /api/collab/storeDocument
@@ -164,6 +165,7 @@ web/src/hooks/with-md/use-syntax-support.ts
 
 web/src/lib/with-md/api.ts
 web/src/lib/with-md/types.ts
+web/src/lib/with-md/convex-functions.ts
 web/src/lib/with-md/syntax.ts
 web/src/lib/with-md/anchor.ts
 web/src/lib/with-md/markdown-diff.ts
@@ -197,6 +199,10 @@ export interface MdFile {
   fileCategory: 'readme' | 'prompt' | 'agent' | 'claude' | 'docs' | 'other';
   editHeartbeat?: number;
   pendingGithubContent?: string;
+  isDeleted?: boolean;
+  deletedAt?: number;
+  syntaxSupportStatus?: 'unknown' | 'supported' | 'unsupported';
+  syntaxSupportReasons?: string[];
 }
 
 export interface CommentAnchorSnapshot {
@@ -248,6 +254,7 @@ export function detectUnsupportedSyntax(md: string): {
 Behavior:
 - `supported=true`: user can choose Read/Edit/Source.
 - `supported=false`: default to Source with non-blocking warning banner.
+- Backend should persist parse compatibility (`syntaxSupportStatus`) so UI can skip repeated expensive checks.
 
 ## 11. TipTap Comment Mark (Custom)
 Use custom mark, not TipTap Comments extension, to avoid markdown-conversion fragility.
@@ -318,7 +325,7 @@ For MVP simplicity and safety:
 
 Buttons:
 - `Apply to Edit Doc` (supported files, reparses markdown into TipTap content).
-- `Save Source` (unsupported files, writes markdown directly to backend and queues push item).
+- `Save Source` (uses `mdFiles.saveSource`, writes markdown directly to Convex and queues push item).
 - `Discard Source Changes`.
 
 ## 14. Comment Anchor Snapshot + Recovery
@@ -428,7 +435,8 @@ Execute in this order:
 11. Implement approximate anchor recovery utilities.
 12. Wire push/resync buttons and activity panel.
 13. Add fidelity guard helper and hook into save paths.
-14. Add test suite and run checks.
+14. Integrate Convex queries/mutations and remove temporary mocks.
+15. Add test suite and run checks.
 
 ## 18. Acceptance Criteria
 Functional:
@@ -489,4 +497,3 @@ At end of one-pass implementation, agent should produce:
 - TipTap comments overview: https://tiptap.dev/docs/comments/getting-started/overview
 - Peritext paper: https://www.inkandswitch.com/peritext/
 - Loro rich text article: https://loro.dev/blog/loro-richtext
-

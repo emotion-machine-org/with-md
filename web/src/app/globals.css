@@ -1,0 +1,87 @@
+@import '../styles/with-md.css';
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/FunktionalGrotesk-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/FunktionalGrotesk-Book.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/FunktionalGrotesk-Regular.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/FunktionalGrotesk-Medium.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/FunktionalGrotesk-Semibold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/FunktionalGrotesk-Bold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Mono';
+  src: url('/fonts/SFMono-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Mono';
+  src: url('/fonts/SFMono-Regular.woff2') format('woff2'),
+       url('/fonts/SFMono-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background: #080b0d;
+  color: #f4f7fa;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
