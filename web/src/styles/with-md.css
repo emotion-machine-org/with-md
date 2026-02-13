@@ -1052,7 +1052,7 @@
   width: 48px;
   border: 0;
   background: transparent;
-  color: var(--withmd-toggle-color);
+  color: rgba(245, 245, 244, 0.85);
   writing-mode: vertical-rl;
   text-orientation: mixed;
   font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -1069,19 +1069,25 @@
   transition: opacity 200ms ease, background 200ms ease, color 160ms ease;
 }
 
-.withmd-side:hover .withmd-side-toggle {
+.withmd-side:hover .withmd-side-toggle:not(.is-open) {
   opacity: 1;
   background: var(--withmd-glass-bg);
 }
 
-.withmd-side-toggle:hover {
-  color: var(--withmd-text);
+.withmd-side-toggle:not(.is-open):hover {
+  color: #f5f5f4;
   background: var(--withmd-glass-bg-hover);
 }
 
 .withmd-side-toggle.is-open {
   opacity: 1;
   background: var(--withmd-drawer-section);
+  color: var(--withmd-text);
+}
+
+.withmd-side-toggle.is-open:hover {
+  background: var(--withmd-glass-bg-hover);
+  color: #f5f5f4;
 }
 
 .withmd-side-toggle-left {
