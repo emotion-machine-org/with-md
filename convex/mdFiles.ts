@@ -46,6 +46,83 @@ export const resolveByPath = query({
   },
 });
 
+export const upsertFromSync = mutation({
+  args: {
+    repoId: v.id('repos'),
+    path: v.string(),
+    content: v.string(),
+    githubSha: v.string(),
+    fileCategory: v.string(),
+    sizeBytes: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('mdFiles')
+      .withIndex('by_repo_and_path', (q) => q.eq('repoId', args.repoId).eq('path', args.path))
+      .first();
+
+    const syntax = detectUnsupportedSyntax(args.content);
+    const now = Date.now();
+
+    if (existing) {
+      // Only update if the GitHub SHA changed
+      if (existing.lastGithubSha === args.githubSha && !existing.isDeleted) {
+        return existing._id;
+      }
+
+      await ctx.db.patch(existing._id, {
+        content: args.content,
+        contentHash: hashContent(args.content),
+        lastGithubSha: args.githubSha,
+        fileCategory: args.fileCategory,
+        sizeBytes: args.sizeBytes,
+        isDeleted: false,
+        deletedAt: undefined,
+        lastSyncedAt: now,
+        syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+        syntaxSupportReasons: syntax.reasons,
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert('mdFiles', {
+      repoId: args.repoId,
+      path: args.path,
+      content: args.content,
+      contentHash: hashContent(args.content),
+      lastGithubSha: args.githubSha,
+      fileCategory: args.fileCategory,
+      sizeBytes: args.sizeBytes,
+      isDeleted: false,
+      lastSyncedAt: now,
+      syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+      syntaxSupportReasons: syntax.reasons,
+    });
+  },
+});
+
+export const markMissingAsDeleted = mutation({
+  args: {
+    repoId: v.id('repos'),
+    existingPaths: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const allFiles = await ctx.db
+      .query('mdFiles')
+      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+      .collect();
+
+    const pathSet = new Set(args.existingPaths);
+    const now = Date.now();
+
+    for (const file of allFiles) {
+      if (!file.isDeleted && !pathSet.has(file.path)) {
+        await ctx.db.patch(file._id, { isDeleted: true, deletedAt: now });
+      }
+    }
+  },
+});
+
 export const saveSource = mutation({
   args: {
     mdFileId: v.id('mdFiles'),

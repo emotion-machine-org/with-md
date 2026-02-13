@@ -8,7 +8,9 @@ export const WITH_MD_CONVEX_FUNCTIONS = {
     commentsListByFile: 'comments:listByFile',
     suggestionsListByFile: 'suggestions:listByFile',
     activitiesListByRepo: 'activities:listByRepo',
-    pushQueueUnpushedCount: 'pushQueue:unpushedCount'
+    pushQueueUnpushedCount: 'pushQueue:unpushedCount',
+    pushQueueListByRepo: 'pushQueue:listByRepo',
+    installationsGet: 'installations:get',
   },
   mutations: {
     commentsCreate: 'comments:create',
@@ -16,13 +18,21 @@ export const WITH_MD_CONVEX_FUNCTIONS = {
     commentsResolve: 'comments:resolve',
     commentsDelete: 'comments:remove',
     mdFilesSaveSource: 'mdFiles:saveSource',
+    mdFilesUpsertFromSync: 'mdFiles:upsertFromSync',
+    mdFilesMarkMissingAsDeleted: 'mdFiles:markMissingAsDeleted',
     suggestionsCreate: 'suggestions:create',
     suggestionsAccept: 'suggestions:accept',
     suggestionsReject: 'suggestions:reject',
     reposResync: 'repos:resync',
+    reposUpsertFromGithub: 'repos:upsertFromGithub',
+    reposUpdateSyncStatus: 'repos:updateSyncStatus',
     reposEnsureSeedData: 'repos:ensureSeedData',
     reposRestoreFallbackFiles: 'repos:restoreFallbackFiles',
     pushQueuePushNow: 'pushQueue:pushNow',
-    activitiesMarkAsRead: 'activities:markAsRead'
-  }
+    pushQueueMarkPushed: 'pushQueue:markPushed',
+    activitiesMarkAsRead: 'activities:markAsRead',
+    activitiesCreate: 'activities:create',
+    usersUpsertFromGithub: 'users:upsertFromGithub',
+    installationsUpsert: 'installations:upsert',
+  },
 } as const;

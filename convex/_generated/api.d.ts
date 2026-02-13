@@ -12,6 +12,7 @@ import type * as activities from "../activities.js";
 import type * as collab from "../collab.js";
 import type * as comments from "../comments.js";
 import type * as http from "../http.js";
+import type * as installations from "../installations.js";
 import type * as lib_markdownDiff from "../lib/markdownDiff.js";
 import type * as lib_syntax from "../lib/syntax.js";
 import type * as mdFiles from "../mdFiles.js";
@@ -19,6 +20,7 @@ import type * as pushQueue from "../pushQueue.js";
 import type * as repos from "../repos.js";
 import type * as seed_fallbackFiles from "../seed/fallbackFiles.js";
 import type * as suggestions from "../suggestions.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -31,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   collab: typeof collab;
   comments: typeof comments;
   http: typeof http;
+  installations: typeof installations;
   "lib/markdownDiff": typeof lib_markdownDiff;
   "lib/syntax": typeof lib_syntax;
   mdFiles: typeof mdFiles;
@@ -38,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   repos: typeof repos;
   "seed/fallbackFiles": typeof seed_fallbackFiles;
   suggestions: typeof suggestions;
+  users: typeof users;
 }>;
 
 /**

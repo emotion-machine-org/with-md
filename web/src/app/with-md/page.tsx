@@ -1,5 +1,60 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+
+import RepoPicker from '@/components/with-md/repo-picker';
 import WithMdShell from '@/components/with-md/with-md-shell';
+import { useAuth } from '@/hooks/with-md/use-auth';
+import { getWithMdApi } from '@/lib/with-md/api';
+
+const api = getWithMdApi();
 
 export default function WithMdPage() {
-  return <WithMdShell />;
+  const { loading: authLoading } = useAuth();
+  const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
+  const [checkingExisting, setCheckingExisting] = useState(true);
+
+  // Check if there's already a real (non-seed) synced repo
+  useEffect(() => {
+    async function check() {
+      try {
+        const repos = await api.listRepos();
+        // Only auto-select repos that came from a real GitHub sync (githubRepoId > 0)
+        const realRepo = repos.find((r) => r.githubRepoId && r.githubRepoId > 0);
+        if (realRepo) {
+          setSelectedRepoId(realRepo.repoId);
+        }
+      } catch {
+        // No existing repos, show picker
+      } finally {
+        setCheckingExisting(false);
+      }
+    }
+
+    void check();
+  }, []);
+
+  const handleRepoSelect = useCallback((result: { repoId: string }) => {
+    setSelectedRepoId(result.repoId);
+  }, []);
+
+  if (authLoading || checkingExisting) {
+    return (
+      <main className="withmd-bg withmd-page withmd-page-pad-6">
+        <div className="withmd-panel withmd-empty-panel">
+          <p className="withmd-muted-sm">Loading...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!selectedRepoId) {
+    return (
+      <main className="withmd-bg withmd-page withmd-page-pad-6">
+        <RepoPicker onSelect={handleRepoSelect} />
+      </main>
+    );
+  }
+
+  return <WithMdShell repoId={selectedRepoId} />;
 }

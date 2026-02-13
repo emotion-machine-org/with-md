@@ -23,6 +23,20 @@ export const unpushedCount = query({
   },
 });
 
+export const markPushed = mutation({
+  args: {
+    pushQueueId: v.id('pushQueue'),
+    commitSha: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.pushQueueId, {
+      status: 'pushed',
+      pushedAt: Date.now(),
+      commitSha: args.commitSha,
+    });
+  },
+});
+
 export const pushNow = mutation({
   args: { repoId: v.id('repos') },
   handler: async (ctx, args) => {

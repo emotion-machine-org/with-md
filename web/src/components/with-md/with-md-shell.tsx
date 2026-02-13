@@ -6,6 +6,7 @@ import CommentsSidebar from '@/components/with-md/comments-sidebar';
 import DocumentSurface from '@/components/with-md/document-surface';
 import DocumentToolbar from '@/components/with-md/document-toolbar';
 import FileTree from '@/components/with-md/file-tree';
+import { useAuth } from '@/hooks/with-md/use-auth';
 import { useCommentAnchors } from '@/hooks/with-md/use-comment-anchors';
 import { useDocMode } from '@/hooks/with-md/use-doc-mode';
 import { getWithMdApi } from '@/lib/with-md/api';
@@ -20,6 +21,7 @@ interface Props {
 const api = getWithMdApi();
 
 export default function WithMdShell({ repoId, filePath }: Props) {
+  const { user } = useAuth();
   const [repos, setRepos] = useState<RepoSummary[]>([]);
   const [activeRepoId, setActiveRepoId] = useState('');
   const [files, setFiles] = useState<MdFile[]>([]);
@@ -205,7 +207,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
       await api.createComment({
         mdFileId: currentFile.mdFileId,
-        authorId: 'local-user',
+        authorId: user?.githubLogin ?? 'local-user',
         body: input.body,
         commentMarkId,
         textQuote: selection?.textQuote ?? '',
@@ -255,17 +257,74 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
   const onPush = useCallback(async () => {
     if (!activeRepoId) return;
-    await api.pushNow(activeRepoId);
-    setStatusMessage('Push triggered.');
+    setStatusMessage('Pushing to GitHub...');
+    try {
+      const res = await fetch('/api/github/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoId: activeRepoId }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? 'Push failed');
+      }
+      const data = (await res.json()) as { pushed: number; commitSha: string | null };
+      setStatusMessage(data.pushed > 0 ? `Pushed ${data.pushed} file(s) to GitHub.` : 'Nothing to push.');
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : 'Push failed.');
+    }
     await reloadActivity();
   }, [activeRepoId, reloadActivity]);
 
   const onResync = useCallback(async () => {
     if (!activeRepoId) return;
-    await api.resync(activeRepoId);
-    setStatusMessage('Re-sync complete.');
+    setStatusMessage('Re-syncing from GitHub...');
+
+    // Find the active repo to get installation details
+    const repo = repos.find((r) => r.repoId === activeRepoId);
+    if (!repo || !repo.installationId || !repo.githubRepoId || !repo.defaultBranch) {
+      // Fallback to old Convex resync
+      await api.resync(activeRepoId);
+      setStatusMessage('Re-sync complete.');
+      await reloadActivity();
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/github/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          installationId: Number(repo.installationId),
+          owner: repo.owner,
+          repo: repo.name,
+          defaultBranch: repo.defaultBranch,
+          githubRepoId: repo.githubRepoId,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? 'Sync failed');
+      }
+      const data = (await res.json()) as { filesCount: number };
+      setStatusMessage(`Re-synced ${data.filesCount} file(s) from GitHub.`);
+
+      // Reload files
+      const loadedFiles = await api.listFilesByRepo(activeRepoId);
+      setFiles(loadedFiles);
+      if (currentFile) {
+        const refreshed = loadedFiles.find((f) => f.mdFileId === currentFile.mdFileId);
+        if (refreshed) {
+          setCurrentFile(refreshed);
+          setSourceValue(refreshed.content);
+          setSavedContent(refreshed.content);
+        }
+      }
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : 'Re-sync failed.');
+    }
     await reloadActivity();
-  }, [activeRepoId, reloadActivity]);
+  }, [activeRepoId, repos, currentFile, reloadActivity]);
 
   const onToggleFiles = useCallback(() => {
     setFilesOpen((prev) => {
@@ -323,9 +382,24 @@ export default function WithMdShell({ repoId, filePath }: Props) {
               syntaxReasons={currentFile.syntaxSupportReasons ?? []}
               statusMessage={statusMessage}
               collabActive={mode === 'edit'}
+              user={user ?? undefined}
               onModeChange={setMode}
               onPush={onPush}
               onResync={onResync}
+              onDownload={() => {
+                if (!currentFile) return;
+                const blob = new Blob([currentFile.content], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = currentFile.path.split('/').pop() ?? 'document.md';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              onLogout={user ? async () => {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/';
+              } : undefined}
             />
 
             <div className="withmd-doc-stage">

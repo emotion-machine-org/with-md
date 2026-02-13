@@ -14,6 +14,10 @@ export interface RepoSummary {
   repoId: string;
   owner: string;
   name: string;
+  installationId?: string;
+  githubRepoId?: number;
+  defaultBranch?: string;
+  githubInstallationId?: number;
 }
 
 export interface MdFile {

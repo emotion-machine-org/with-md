@@ -143,6 +143,56 @@ export const get = query({
   },
 });
 
+export const upsertFromGithub = mutation({
+  args: {
+    installationId: v.id('installations'),
+    githubRepoId: v.number(),
+    owner: v.string(),
+    name: v.string(),
+    defaultBranch: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('repos')
+      .withIndex('by_github_repo_id', (q) => q.eq('githubRepoId', args.githubRepoId))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        installationId: args.installationId,
+        owner: args.owner,
+        name: args.name,
+        defaultBranch: args.defaultBranch,
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert('repos', {
+      installationId: args.installationId,
+      githubRepoId: args.githubRepoId,
+      owner: args.owner,
+      name: args.name,
+      defaultBranch: args.defaultBranch,
+      syncStatus: 'syncing',
+    });
+  },
+});
+
+export const updateSyncStatus = mutation({
+  args: {
+    repoId: v.id('repos'),
+    syncStatus: v.string(),
+    lastSyncedCommitSha: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const patch: Record<string, unknown> = { syncStatus: args.syncStatus };
+    if (args.lastSyncedCommitSha !== undefined) {
+      patch.lastSyncedCommitSha = args.lastSyncedCommitSha;
+    }
+    await ctx.db.patch(args.repoId, patch);
+  },
+});
+
 export const resync = mutation({
   args: { repoId: v.id('repos') },
   handler: async (ctx, args) => {

@@ -1242,6 +1242,47 @@
 
 ::highlight(withmd-active-comment) {
   background: var(--withmd-comment);
+.withmd-repo-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 0;
+  background: var(--withmd-glass-bg);
+  color: var(--withmd-body);
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.withmd-repo-row:hover {
+  background: var(--withmd-glass-bg-hover);
+  color: var(--withmd-text);
+}
+
+.withmd-repo-row:active {
+  background: var(--withmd-glass-bg-active);
+}
+
+.withmd-repo-row:disabled {
+  cursor: not-allowed;
+}
+
+.withmd-repo-name {
+  font-weight: 500;
+  color: var(--withmd-text);
+}
+
+.withmd-repo-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--withmd-muted);
+  border: 1px solid var(--withmd-border);
+  padding: 1px 6px;
+  letter-spacing: 0.02em;
 }
 
 @media (max-width: 1200px) {

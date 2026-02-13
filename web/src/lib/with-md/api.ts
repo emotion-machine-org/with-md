@@ -36,6 +36,9 @@ interface WithMdRepoRow {
   _id: string;
   owner: string;
   name: string;
+  installationId?: string;
+  githubRepoId?: number;
+  defaultBranch?: string;
 }
 
 interface WithMdFileRow {
@@ -125,6 +128,9 @@ function mapRepo(row: WithMdRepoRow): RepoSummary {
     repoId: row._id,
     owner: row.owner,
     name: row.name,
+    installationId: row.installationId,
+    githubRepoId: row.githubRepoId,
+    defaultBranch: row.defaultBranch,
   };
 }
 
@@ -212,8 +218,6 @@ async function mutateConvex<T>(name: string, args: Record<string, unknown>): Pro
 
 const convexApi: WithMdApi = {
   async listRepos() {
-    // Idempotent: ensures fallback repo/files exist without overwriting user-edited files.
-    await mutateConvex(WITH_MD_CONVEX_FUNCTIONS.mutations.reposEnsureSeedData, {});
     const rows = await queryConvex<WithMdRepoRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.reposList, {});
     return rows.map(mapRepo);
   },

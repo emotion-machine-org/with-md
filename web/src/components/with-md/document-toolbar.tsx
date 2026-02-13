@@ -2,15 +2,24 @@
 
 import type { DocMode } from '@/lib/with-md/types';
 
+interface AuthUser {
+  userId: string;
+  githubLogin: string;
+  avatarUrl?: string;
+}
+
 interface Props {
   mode: DocMode;
   canUseEditMode: boolean;
   syntaxReasons: string[];
   statusMessage: string | null;
   collabActive: boolean;
+  user?: AuthUser;
   onModeChange(next: DocMode): void;
   onPush(): void;
   onResync(): void;
+  onDownload?(): void;
+  onLogout?(): void;
 }
 
 const SYNTAX_REASON_LABELS: Record<string, string> = {
@@ -61,9 +70,12 @@ export default function DocumentToolbar({
   syntaxReasons,
   statusMessage,
   collabActive,
+  user,
   onModeChange,
   onPush,
   onResync,
+  onDownload,
+  onLogout,
 }: Props) {
   const syntaxLabel = syntaxReasons.map((reason) => SYNTAX_REASON_LABELS[reason] ?? reason).join(', ');
 
@@ -105,6 +117,28 @@ export default function DocumentToolbar({
           <MoonIcon />
           <span className="withmd-dock-tooltip">Theme</span>
         </button>
+
+        {user && (
+          <>
+            <span className="withmd-dock-gap" />
+            <div className="withmd-row" style={{ gap: 6, alignItems: 'center' }}>
+              {user.avatarUrl && (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.githubLogin}
+                  style={{ width: 22, height: 22, borderRadius: '50%' }}
+                />
+              )}
+              <span className="withmd-muted-xs">{user.githubLogin}</span>
+              {onLogout && (
+                <button type="button" className="withmd-dock-btn" onClick={onLogout} aria-label="Logout">
+                  <LogoutIcon />
+                  <span className="withmd-dock-tooltip">Logout</span>
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {!canUseEditMode && (
@@ -182,6 +216,22 @@ function MoonIcon() {
   return (
     <svg className="withmd-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M10 7a7 7 0 0 0 12 4.9v.1c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2h.1A6.98 6.98 0 0 0 10 7zm-6 5a8 8 0 0 0 15.062 3.762A9 9 0 0 1 8.238 4.938 7.999 7.999 0 0 0 4 12z" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M13 10H18L12 16L6 10H11V3H13V10ZM4 19H20V12H22V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V12H4V19Z" />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 22a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v3h-2V4H6v16h12v-2h2v3a1 1 0 0 1-1 1H5zm13-6v-3H10v-2h8V8l5 4-5 4z" />
     </svg>
   );
 }
