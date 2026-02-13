@@ -39,6 +39,7 @@ export default function CommentsSidebar({ comments, anchorByCommentId, onCreate 
         <textarea
           className="withmd-comment-input"
           placeholder="Add a comment..."
+          rows={1}
           value={body}
           onChange={(event) => setBody(event.target.value)}
         />

@@ -76,6 +76,12 @@
   --withmd-filetree-dir-color: rgba(68, 64, 60, 0.78);
 }
 
+.withmd-page *:focus,
+.withmd-page *:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .withmd-bg {
   background-image:
     linear-gradient(var(--withmd-bg-overlay), var(--withmd-bg-overlay)),
@@ -166,6 +172,7 @@
   font-size: 13px;
   line-height: 1.45;
   resize: none;
+  outline: none;
 }
 
 .withmd-inline-input,
@@ -194,7 +201,6 @@
 }
 
 .withmd-comment-input {
-  min-height: 64px;
   resize: none;
 }
 

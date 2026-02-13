@@ -48,6 +48,7 @@ npx convex env set HOCUSPOCUS_CONVEX_SECRET "<your-secret>"
 NEXT_PUBLIC_CONVEX_URL=https://<your-deployment>.convex.cloud
 NEXT_PUBLIC_HOCUSPOCUS_URL=ws://localhost:3001
 NEXT_PUBLIC_WITHMD_ENABLE_REALTIME=1
+NEXT_PUBLIC_WITHMD_ENABLE_REALTIME_EXPERIMENTAL=0
 ```
 
 `hocuspocus-server/.env`:
@@ -77,4 +78,5 @@ npm run dev
 - This workspace is intentionally independent from `/web` and `/server`.
 - The web app is now bound to Convex (no in-memory mock adapter).
 - On first load, if Convex has no repos, seed data is created automatically.
+- Realtime collab transport is behind an experimental flag (`NEXT_PUBLIC_WITHMD_ENABLE_REALTIME_EXPERIMENTAL=1`).
 - `Push` / `Re-sync` are currently queue/status operations. Wire your Git worker to consume `pushQueue` for full GitHub commits.
