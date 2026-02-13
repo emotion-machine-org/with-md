@@ -91,11 +91,11 @@ export default function DocumentToolbar({
         </p>
       )}
 
-      <div className="withmd-row withmd-gap-2 withmd-mt-2 withmd-dock-meta">
-        <span className={collabActive ? 'withmd-dot withmd-dot-online' : 'withmd-dot withmd-dot-offline'} />
-        <span className="withmd-muted-xs">{collabActive ? 'Live collaboration active' : 'Read-only standby'}</span>
-        {statusMessage && <span className="withmd-muted-xs withmd-dock-status">{statusMessage}</span>}
-      </div>
+      {statusMessage && (
+        <div className="withmd-row withmd-gap-2 withmd-mt-2 withmd-dock-meta">
+          <span className="withmd-muted-xs withmd-dock-status">{statusMessage}</span>
+        </div>
+      )}
     </header>
   );
 }

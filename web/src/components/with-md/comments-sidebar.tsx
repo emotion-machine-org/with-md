@@ -12,8 +12,6 @@ interface Props {
 
 export default function CommentsSidebar({ comments, anchorByCommentId, onCreate }: Props) {
   const [body, setBody] = useState('');
-  const [quote, setQuote] = useState('');
-  const [line, setLine] = useState(1);
   const [saving, setSaving] = useState(false);
 
   const ordered = useMemo(() => [...comments].sort((a, b) => b.createdAt - a.createdAt), [comments]);
@@ -24,11 +22,10 @@ export default function CommentsSidebar({ comments, anchorByCommentId, onCreate 
     try {
       await onCreate({
         body: body.trim(),
-        textQuote: quote.trim(),
-        fallbackLine: line,
+        textQuote: '',
+        fallbackLine: 1,
       });
       setBody('');
-      setQuote('');
     } finally {
       setSaving(false);
     }
@@ -38,32 +35,20 @@ export default function CommentsSidebar({ comments, anchorByCommentId, onCreate 
     <aside className="withmd-drawer-section withmd-column withmd-fill withmd-pad-3">
       <h2 className="withmd-sidebar-title">Comments</h2>
 
-      <div className="withmd-card withmd-mt-2">
+      <div className="withmd-comment-form withmd-mt-2">
         <textarea
           className="withmd-comment-input"
-          placeholder="Add a comment"
+          placeholder="Add a comment..."
           value={body}
           onChange={(event) => setBody(event.target.value)}
         />
-        <input
-          className="withmd-inline-input withmd-mt-2"
-          placeholder="Quoted text (optional)"
-          value={quote}
-          onChange={(event) => setQuote(event.target.value)}
-        />
-        <div className="withmd-row withmd-gap-2 withmd-mt-2">
-          <label className="withmd-muted-xs" htmlFor="fallback-line">
-            Line
-          </label>
-          <input
-            id="fallback-line"
-            type="number"
-            min={1}
-            className="withmd-inline-input withmd-w-20"
-            value={line}
-            onChange={(event) => setLine(Math.max(1, Number(event.target.value) || 1))}
-          />
-          <button type="button" className="withmd-btn withmd-btn-primary withmd-ml-auto" onClick={submit}>
+        <div className="withmd-row withmd-mt-2">
+          <button
+            type="button"
+            className="withmd-btn withmd-btn-primary withmd-ml-auto"
+            onClick={submit}
+            disabled={saving || !body.trim()}
+          >
             {saving ? 'Saving...' : 'Comment'}
           </button>
         </div>

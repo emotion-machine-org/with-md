@@ -626,6 +626,10 @@
   padding: 0.5rem;
 }
 
+.withmd-comment-form {
+  padding: 0;
+}
+
 .withmd-filetree {
   font-size: 12px;
   line-height: 1.45;
