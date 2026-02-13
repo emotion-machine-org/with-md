@@ -20,6 +20,8 @@ const SYNTAX_REASON_LABELS: Record<string, string> = {
   gfm_table: 'gfm_table',
 };
 
+const BG_COUNT = 8;
+
 function modeClass(active: boolean): string {
   return active ? 'withmd-dock-btn withmd-dock-btn-active' : 'withmd-dock-btn';
 }
@@ -31,6 +33,23 @@ function toggleTheme() {
   html.setAttribute('data-theme', next);
   try {
     localStorage.setItem('withmd-theme', next);
+  } catch (e) {
+    /* noop */
+  }
+}
+
+function cycleBackground() {
+  let current = 0;
+  try {
+    current = parseInt(localStorage.getItem('withmd-bg') ?? '0', 10) || 0;
+  } catch (e) {
+    /* noop */
+  }
+  const next = (current + 1) % BG_COUNT;
+  const url = `/with-md/backgrounds/background_${next}.webp`;
+  document.documentElement.style.setProperty('--withmd-bg-url', `url('${url}')`);
+  try {
+    localStorage.setItem('withmd-bg', String(next));
   } catch (e) {
     /* noop */
   }
@@ -51,42 +70,36 @@ export default function DocumentToolbar({
   return (
     <header className="withmd-dock-wrap">
       <div className="withmd-dock">
-        <div className="withmd-row" style={{ gap: 2 }}>
-          <button type="button" className={modeClass(mode === 'read')} onClick={() => onModeChange('read')} aria-label="Read">
-            <ReadIcon />
-            <span className="withmd-dock-tooltip">Read</span>
-          </button>
-          <button
-            type="button"
-            className={modeClass(mode === 'edit')}
-            onClick={() => onModeChange('edit')}
-            disabled={!canUseEditMode}
-            aria-label="Edit"
-          >
-            <EditIcon />
-            <span className="withmd-dock-tooltip">Edit</span>
-          </button>
-          <button type="button" className={modeClass(mode === 'source')} onClick={() => onModeChange('source')} aria-label="Source">
-            <CodeIcon />
-            <span className="withmd-dock-tooltip">Source</span>
-          </button>
-        </div>
-
-        <span className="withmd-dock-gap" />
-
-        <div className="withmd-row" style={{ gap: 2 }}>
-          <button type="button" className="withmd-dock-btn" onClick={onResync} aria-label="Re-sync">
-            <SyncIcon />
-            <span className="withmd-dock-tooltip">Re-sync</span>
-          </button>
-          <button type="button" className="withmd-dock-btn withmd-dock-btn-primary" onClick={onPush} aria-label="Push">
-            <PushIcon />
-            <span className="withmd-dock-tooltip">Push</span>
-          </button>
-        </div>
-
-        <span className="withmd-dock-gap" />
-
+        <button type="button" className={modeClass(mode === 'read')} onClick={() => onModeChange('read')} aria-label="Read">
+          <ReadIcon />
+          <span className="withmd-dock-tooltip">Read</span>
+        </button>
+        <button
+          type="button"
+          className={modeClass(mode === 'edit')}
+          onClick={() => onModeChange('edit')}
+          disabled={!canUseEditMode}
+          aria-label="Edit"
+        >
+          <EditIcon />
+          <span className="withmd-dock-tooltip">Edit</span>
+        </button>
+        <button type="button" className={modeClass(mode === 'source')} onClick={() => onModeChange('source')} aria-label="Source">
+          <CodeIcon />
+          <span className="withmd-dock-tooltip">Source</span>
+        </button>
+        <button type="button" className="withmd-dock-btn" onClick={onResync} aria-label="Re-sync">
+          <SyncIcon />
+          <span className="withmd-dock-tooltip">Re-sync</span>
+        </button>
+        <button type="button" className="withmd-dock-btn" onClick={onPush} aria-label="Push">
+          <PushIcon />
+          <span className="withmd-dock-tooltip">Push</span>
+        </button>
+        <button type="button" className="withmd-dock-btn" onClick={cycleBackground} aria-label="Change background">
+          <ImageIcon />
+          <span className="withmd-dock-tooltip">Background</span>
+        </button>
         <button type="button" className="withmd-dock-btn" onClick={toggleTheme} aria-label="Toggle theme">
           <SunIcon />
           <MoonIcon />
@@ -145,6 +158,14 @@ function PushIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 3 7 8h3v6h4V8h3l-5-5zm-7 14v4h14v-4h2v6H3v-6h2z" />
+    </svg>
+  );
+}
+
+function ImageIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-5.5z" />
     </svg>
   );
 }

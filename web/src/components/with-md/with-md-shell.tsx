@@ -10,7 +10,7 @@ import { useCommentAnchors } from '@/hooks/with-md/use-comment-anchors';
 import { useDocMode } from '@/hooks/with-md/use-doc-mode';
 import { getWithMdApi } from '@/lib/with-md/api';
 import { hasMeaningfulDiff } from '@/lib/with-md/markdown-diff';
-import type { ActivityItem, CommentRecord, MdFile, RepoSummary } from '@/lib/with-md/types';
+import type { ActivityItem, CommentRecord, CommentSelectionDraft, MdFile, RepoSummary } from '@/lib/with-md/types';
 
 interface Props {
   repoId?: string;
@@ -32,6 +32,10 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [comments, setComments] = useState<CommentRecord[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<CommentSelectionDraft | null>(null);
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const [focusRequestId, setFocusRequestId] = useState(0);
+  const [markRequest, setMarkRequest] = useState<{ requestId: number; commentMarkId: string; from: number; to: number } | null>(null);
 
   useEffect(() => {
     async function bootstrap() {
@@ -88,11 +92,21 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     if (!currentFile) return;
     setSourceValue(currentFile.content);
     setSavedContent(currentFile.content);
+    setPendingSelection(null);
+    setActiveCommentId(null);
+    setFocusRequestId(0);
+    setMarkRequest(null);
   }, [currentFile?.mdFileId]);
 
   const syntaxSupported = currentFile?.syntaxSupportStatus !== 'unsupported';
   const { mode, setMode, canUseEditMode } = useDocMode(syntaxSupported, 'read');
   const sourceDirty = Boolean(currentFile && hasMeaningfulDiff(sourceValue, currentFile.content));
+
+  useEffect(() => {
+    if (mode === 'source') {
+      setPendingSelection(null);
+    }
+  }, [mode]);
 
   const anchorMap = useCommentAnchors(currentFile?.content ?? '', comments);
 
@@ -182,21 +196,61 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   }, [currentFile, mode, reloadActivity, savedContent]);
 
   const onCreateComment = useCallback(
-    async (input: { body: string; textQuote: string; fallbackLine: number }) => {
+    async (input: { body: string; selection: CommentSelectionDraft | null }) => {
       if (!currentFile) return;
+      const selection = input.selection;
+      const commentMarkId = selection?.source === 'edit'
+        ? `cmark_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        : undefined;
 
       await api.createComment({
         mdFileId: currentFile.mdFileId,
         authorId: 'local-user',
         body: input.body,
-        textQuote: input.textQuote,
-        fallbackLine: input.fallbackLine,
+        commentMarkId,
+        textQuote: selection?.textQuote ?? '',
+        fallbackLine: selection?.fallbackLine ?? 1,
+        anchorPrefix: selection?.anchorPrefix,
+        anchorSuffix: selection?.anchorSuffix,
+        anchorHeadingPath: selection?.anchorHeadingPath,
+        rangeStart: selection?.rangeStart,
+        rangeEnd: selection?.rangeEnd,
       });
 
+      if (
+        commentMarkId &&
+        typeof selection?.selectionFrom === 'number' &&
+        typeof selection?.selectionTo === 'number' &&
+        selection.selectionFrom < selection.selectionTo
+      ) {
+        setMarkRequest({
+          requestId: Date.now(),
+          commentMarkId,
+          from: selection.selectionFrom,
+          to: selection.selectionTo,
+        });
+      }
+
+      setPendingSelection(null);
       await reloadCurrentFileData();
       await reloadActivity();
     },
     [currentFile, reloadActivity, reloadCurrentFileData],
+  );
+
+  const onSelectComment = useCallback(
+    (comment: CommentRecord) => {
+      setActiveCommentId(comment.id);
+      setFocusRequestId((prev) => prev + 1);
+      if (mode === 'source') {
+        setMode('read');
+      }
+      if (!commentsOpen) {
+        setCommentsOpen(true);
+        setFilesOpen(false);
+      }
+    },
+    [commentsOpen, mode, setMode],
   );
 
   const onPush = useCallback(async () => {
@@ -228,6 +282,9 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       return next;
     });
   }, []);
+
+  const activeComment = comments.find((comment) => comment.id === activeCommentId) ?? null;
+  const activeAnchorMatch = activeComment ? (anchorMap.get(activeComment.id) ?? null) : null;
 
   if (!currentFile) {
     return (
@@ -277,6 +334,11 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   mdFileId={currentFile.mdFileId}
                   mode={mode}
                   readContent={currentFile.content}
+                  comments={comments}
+                  focusedCommentId={activeComment?.id ?? null}
+                  focusedComment={activeComment}
+                  focusedAnchorMatch={activeAnchorMatch}
+                  focusRequestId={focusRequestId}
                   sourceValue={sourceValue}
                   sourceDirty={sourceDirty}
                   sourceSaving={isSavingSource}
@@ -289,9 +351,32 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                     setCurrentFile((prev) => (prev ? { ...prev, content: next } : prev));
                     setSourceValue(next);
                   }}
+                  onSelectionDraftChange={(next) => {
+                    if (next) setPendingSelection(next);
+                  }}
+                  markRequest={markRequest}
+                  onMarkRequestApplied={(requestId) => {
+                    setMarkRequest((prev) => (prev?.requestId === requestId ? null : prev));
+                  }}
                 />
               </div>
             </div>
+            {pendingSelection && (
+              <button
+                type="button"
+                className="withmd-selection-trigger"
+                style={{
+                  left: `${pendingSelection.rect.left + pendingSelection.rect.width / 2 + 10}px`,
+                  top: `${pendingSelection.rect.top - 36}px`,
+                }}
+                onClick={() => {
+                  setCommentsOpen(true);
+                  setFilesOpen(false);
+                }}
+              >
+                Comment
+              </button>
+            )}
           </section>
         </section>
 
@@ -305,7 +390,23 @@ export default function WithMdShell({ repoId, filePath }: Props) {
           </button>
           <div className="withmd-drawer withmd-drawer-right">
             <div className="withmd-drawer-inner withmd-column withmd-gap-3">
-              <CommentsSidebar comments={comments} anchorByCommentId={anchorMap} onCreate={onCreateComment} />
+              <CommentsSidebar
+                comments={comments}
+                pendingSelection={pendingSelection}
+                activeCommentId={activeCommentId}
+                anchorByCommentId={anchorMap}
+                onCreate={onCreateComment}
+                onDeleteComment={async (comment) => {
+                  await api.deleteComment(comment.id);
+                  if (activeCommentId === comment.id) {
+                    setActiveCommentId(null);
+                  }
+                  await reloadCurrentFileData();
+                  await reloadActivity();
+                }}
+                onSelectComment={onSelectComment}
+                onClearSelection={() => setPendingSelection(null)}
+              />
             </div>
           </div>
         </aside>

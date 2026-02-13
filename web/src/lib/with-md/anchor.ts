@@ -6,6 +6,11 @@ function span(start: number, len: number): AnchorMatch {
   return { start, end: start + len };
 }
 
+export function lineNumberAtIndex(markdown: string, index: number): number {
+  if (index <= 0) return 1;
+  return markdown.slice(0, Math.min(index, markdown.length)).split('\n').length;
+}
+
 export function findAllIndices(haystack: string, needle: string): number[] {
   if (!needle) return [];
 
@@ -20,6 +25,68 @@ export function findAllIndices(haystack: string, needle: string): number[] {
   }
 
   return out;
+}
+
+interface NormalizedText {
+  value: string;
+  sourceIndexByNormalizedIndex: number[];
+}
+
+function normalizeSearchChar(char: string): string {
+  if (char === '\u00a0') return ' ';
+  if (char === '•' || char === '◦' || char === '▪') return '-';
+  if (char === '’' || char === '‘') return "'";
+  if (char === '“' || char === '”') return '"';
+  return char;
+}
+
+function normalizeForSearch(input: string): NormalizedText {
+  let value = '';
+  const sourceIndexByNormalizedIndex: number[] = [];
+  let lastWasSpace = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const raw = normalizeSearchChar(input[i]);
+    const isSpace = /\s/.test(raw);
+
+    if (isSpace) {
+      if (lastWasSpace) continue;
+      value += ' ';
+      sourceIndexByNormalizedIndex.push(i);
+      lastWasSpace = true;
+      continue;
+    }
+
+    value += raw.toLowerCase();
+    sourceIndexByNormalizedIndex.push(i);
+    lastWasSpace = false;
+  }
+
+  return { value, sourceIndexByNormalizedIndex };
+}
+
+function normalizedEquals(a: string, b: string): boolean {
+  return normalizeForSearch(a).value.trim() === normalizeForSearch(b).value.trim();
+}
+
+export function findApproximateQuoteInMarkdown(markdown: string, quote: string): AnchorMatch | null {
+  if (!quote.trim()) return null;
+
+  const normalizedMarkdown = normalizeForSearch(markdown);
+  const normalizedQuote = normalizeForSearch(quote);
+  const needle = normalizedQuote.value.trim();
+  if (!needle) return null;
+
+  const haystack = normalizedMarkdown.value;
+  const hit = haystack.indexOf(needle);
+  if (hit < 0) return null;
+
+  const startSource = normalizedMarkdown.sourceIndexByNormalizedIndex[hit];
+  const endNormIndex = hit + needle.length - 1;
+  const endSourceRaw = normalizedMarkdown.sourceIndexByNormalizedIndex[endNormIndex];
+  if (typeof startSource !== 'number' || typeof endSourceRaw !== 'number') return null;
+
+  return { start: startSource, end: Math.min(markdown.length, endSourceRaw + 1) };
 }
 
 export function contextScore(
@@ -116,6 +183,18 @@ export function findSectionByHeadingPath(
 
 export function recoverAnchor(markdown: string, anchor: CommentAnchorSnapshot): AnchorMatch | null {
   const quote = anchor.textQuote;
+
+  if (typeof anchor.rangeStart === 'number' && anchor.rangeStart >= 0) {
+    const start = anchor.rangeStart;
+    const end = typeof anchor.rangeEnd === 'number' && anchor.rangeEnd >= start
+      ? anchor.rangeEnd
+      : (quote ? start + quote.length : start);
+    const slice = markdown.slice(start, end);
+    if (!quote || slice === quote || normalizedEquals(slice, quote)) {
+      return { start, end };
+    }
+  }
+
   if (!quote) return null;
 
   const exact = findAllIndices(markdown, quote);
@@ -140,7 +219,15 @@ export function recoverAnchor(markdown: string, anchor: CommentAnchorSnapshot): 
     if (inSection >= 0) {
       return span(section.start + inSection, quote.length);
     }
+
+    const approxInSection = findApproximateQuoteInMarkdown(section.content, quote);
+    if (approxInSection) {
+      return { start: section.start + approxInSection.start, end: section.start + approxInSection.end };
+    }
   }
+
+  const approximate = findApproximateQuoteInMarkdown(markdown, quote);
+  if (approximate) return approximate;
 
   return null;
 }

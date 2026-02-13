@@ -17,11 +17,14 @@ interface CreateCommentInput {
   mdFileId: string;
   authorId: string;
   body: string;
+  commentMarkId?: string;
   textQuote: string;
   fallbackLine: number;
   anchorPrefix?: string;
   anchorSuffix?: string;
   anchorHeadingPath?: string[];
+  rangeStart?: number;
+  rangeEnd?: number;
 }
 
 interface SaveSourceInput {
@@ -65,6 +68,8 @@ interface WithMdCommentRow {
   anchorSuffix?: string;
   anchorHeadingPath?: string[];
   fallbackLine?: number;
+  rangeStart?: number;
+  rangeEnd?: number;
   _creationTime?: number;
 }
 
@@ -83,6 +88,7 @@ export interface WithMdApi {
   getFile(mdFileId: string): Promise<MdFile | null>;
   listCommentsByFile(mdFileId: string): Promise<CommentRecord[]>;
   createComment(input: CreateCommentInput): Promise<CommentRecord>;
+  deleteComment(commentId: string): Promise<void>;
   saveSource(input: SaveSourceInput): Promise<{ changed: boolean }>;
   listActivity(repoId: string): Promise<ActivityItem[]>;
   pushNow(repoId: string): Promise<{ ok: boolean }>;
@@ -91,6 +97,17 @@ export interface WithMdApi {
 
 function nowId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function indexFromLineNumber(content: string, lineNumber: number): number {
+  if (!Number.isFinite(lineNumber) || lineNumber <= 1) return 0;
+  const target = Math.floor(lineNumber);
+  let line = 1;
+  for (let i = 0; i < content.length; i += 1) {
+    if (line >= target) return i;
+    if (content[i] === '\n') line += 1;
+  }
+  return content.length;
 }
 
 function normalizeCategory(input: string): FileCategory {
@@ -144,6 +161,8 @@ function mapComment(row: WithMdCommentRow): CommentRecord {
     anchorSuffix: row.anchorSuffix ?? '',
     anchorHeadingPath: row.anchorHeadingPath ?? [],
     fallbackLine: row.fallbackLine ?? 1,
+    rangeStart: row.rangeStart,
+    rangeEnd: row.rangeEnd,
   };
 
   return {
@@ -235,22 +254,34 @@ const convexApi: WithMdApi = {
     if (!file) throw new Error('File not found');
 
     const firstQuoteIndex = input.textQuote ? file.content.indexOf(input.textQuote) : -1;
-    const anchorAt = firstQuoteIndex >= 0 ? firstQuoteIndex : 0;
+    const anchorAt = typeof input.rangeStart === 'number'
+      ? input.rangeStart
+      : firstQuoteIndex >= 0
+        ? firstQuoteIndex
+        : indexFromLineNumber(file.content, input.fallbackLine);
 
     const row = await mutateConvex<WithMdCommentRow>(WITH_MD_CONVEX_FUNCTIONS.mutations.commentsCreate, {
       mdFileId: input.mdFileId as never,
       authorId: input.authorId,
       body: input.body,
-      commentMarkId: nowId('cmark'),
+      commentMarkId: input.commentMarkId ?? nowId('cmark'),
       textQuote: input.textQuote,
       anchorPrefix: input.anchorPrefix ?? file.content.slice(Math.max(0, anchorAt - 32), Math.max(0, anchorAt)),
       anchorSuffix:
         input.anchorSuffix ?? file.content.slice(anchorAt, Math.min(anchorAt + 32, file.content.length)),
       anchorHeadingPath: input.anchorHeadingPath ?? extractHeadingPathAtIndex(file.content, anchorAt),
       fallbackLine: input.fallbackLine,
+      rangeStart: input.rangeStart,
+      rangeEnd: input.rangeEnd,
     });
 
     return mapComment(row);
+  },
+
+  async deleteComment(commentId) {
+    await mutateConvex(WITH_MD_CONVEX_FUNCTIONS.mutations.commentsDelete, {
+      commentId: commentId as never,
+    });
   },
 
   async saveSource({ mdFileId, sourceContent }) {

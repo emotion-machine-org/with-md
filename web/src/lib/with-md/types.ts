@@ -38,6 +38,8 @@ export interface CommentAnchorSnapshot {
   anchorSuffix: string;
   anchorHeadingPath: string[];
   fallbackLine: number;
+  rangeStart?: number;
+  rangeEnd?: number;
 }
 
 export interface CommentRecord {
@@ -74,4 +76,23 @@ export interface SyntaxSupportResult {
 export interface AnchorMatch {
   start: number;
   end: number;
+}
+
+export interface CommentSelectionDraft {
+  source: 'read' | 'edit';
+  textQuote: string;
+  anchorPrefix: string;
+  anchorSuffix: string;
+  anchorHeadingPath: string[];
+  fallbackLine: number;
+  rangeStart?: number;
+  rangeEnd?: number;
+  selectionFrom?: number;
+  selectionTo?: number;
+  rect: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
 }

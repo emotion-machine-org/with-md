@@ -30,6 +30,8 @@ export const create = mutation({
     anchorSuffix: v.optional(v.string()),
     anchorHeadingPath: v.optional(v.array(v.string())),
     fallbackLine: v.optional(v.number()),
+    rangeStart: v.optional(v.number()),
+    rangeEnd: v.optional(v.number()),
     parentCommentId: v.optional(v.id('comments')),
   },
   handler: async (ctx, args) => {
@@ -50,6 +52,8 @@ export const create = mutation({
       anchorSuffix: args.anchorSuffix,
       anchorHeadingPath: args.anchorHeadingPath,
       fallbackLine: args.fallbackLine,
+      rangeStart: args.rangeStart,
+      rangeEnd: args.rangeEnd,
       parentCommentId: args.parentCommentId,
     });
 

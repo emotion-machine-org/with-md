@@ -13,7 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('withmd-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()`,
+            __html: `(function(){try{var t=localStorage.getItem('withmd-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);var b=localStorage.getItem('withmd-bg');if(b)document.documentElement.style.setProperty('--withmd-bg-url',"url('/with-md/backgrounds/background_"+b+".webp')")}catch(e){}})()`,
           }}
         />
       </head>

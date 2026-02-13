@@ -58,6 +58,8 @@ export default defineSchema({
     anchorSuffix: v.optional(v.string()),
     anchorHeadingPath: v.optional(v.array(v.string())),
     fallbackLine: v.optional(v.number()),
+    rangeStart: v.optional(v.number()),
+    rangeEnd: v.optional(v.number()),
   })
     .index('by_md_file', ['mdFileId'])
     .index('by_parent', ['parentCommentId'])
