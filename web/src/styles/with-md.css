@@ -1242,6 +1242,8 @@
 
 ::highlight(withmd-active-comment) {
   background: var(--withmd-comment);
+}
+
 .withmd-repo-row {
   width: 100%;
   display: flex;
