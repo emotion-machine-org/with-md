@@ -1,13 +1,19 @@
 'use client';
 
+import { useCallback, useRef, useState } from 'react';
+
 import CollabEditor from '@/components/with-md/collab-editor';
 import ReadRenderer from '@/components/with-md/read-renderer';
 import SourceEditor from '@/components/with-md/source-editor';
-import type { AnchorMatch, CommentRecord, CommentSelectionDraft, DocMode } from '@/lib/with-md/types';
+import { useIdleTimeout } from '@/hooks/with-md/use-idle-timeout';
+import type { AnchorMatch, CommentRecord, CommentSelectionDraft, CursorHint, UserMode } from '@/lib/with-md/types';
+
+const IDLE_TIMEOUT = 5000;
 
 interface Props {
   mdFileId: string;
-  mode: DocMode;
+  userMode: UserMode;
+  editing: boolean;
   readContent: string;
   comments: CommentRecord[];
   focusedCommentId: string | null;
@@ -26,11 +32,14 @@ interface Props {
   onSelectionDraftChange(next: CommentSelectionDraft | null): void;
   markRequest: { requestId: number; commentMarkId: string; from: number; to: number } | null;
   onMarkRequestApplied(requestId: number): void;
+  onActivateEditing(): void;
+  onDeactivateEditing(): void;
 }
 
 export default function DocumentSurface({
   mdFileId,
-  mode,
+  userMode,
+  editing,
   readContent,
   comments,
   focusedCommentId,
@@ -49,40 +58,101 @@ export default function DocumentSurface({
   onSelectionDraftChange,
   markRequest,
   onMarkRequestApplied,
+  onActivateEditing,
+  onDeactivateEditing,
 }: Props) {
-  if (mode === 'source') {
+  const editContainerRef = useRef<HTMLDivElement>(null);
+  const sourceContainerRef = useRef<HTMLDivElement>(null);
+  const [cursorHint, setCursorHint] = useState<CursorHint | null>(null);
+
+  useIdleTimeout({
+    containerRef: editContainerRef,
+    timeout: IDLE_TIMEOUT,
+    enabled: editing && userMode === 'document',
+    onIdle: onDeactivateEditing,
+  });
+
+  useIdleTimeout({
+    containerRef: sourceContainerRef,
+    timeout: IDLE_TIMEOUT,
+    enabled: editing && userMode === 'source' && !sourceDirty,
+    onIdle: onDeactivateEditing,
+  });
+
+  const handleReadClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) return;
+
+      let sourceLine: number | undefined;
+      let textFragment: string | undefined;
+
+      const target = e.target as HTMLElement;
+      const lineAttr = target.closest('[data-source-line]')?.getAttribute('data-source-line');
+      if (lineAttr) {
+        sourceLine = parseInt(lineAttr, 10);
+      }
+      const textContent = target.textContent?.trim();
+      if (textContent && textContent.length > 2 && textContent.length < 200) {
+        textFragment = textContent;
+      }
+
+      setCursorHint({ sourceLine, textFragment });
+      onActivateEditing();
+    },
+    [onActivateEditing],
+  );
+
+  const handleSourceReadClick = useCallback(() => {
+    onActivateEditing();
+  }, [onActivateEditing]);
+
+  if (userMode === 'source') {
+    if (!editing) {
+      return (
+        <div className="withmd-column withmd-fill withmd-gap-3" onClick={handleSourceReadClick}>
+          <pre className="withmd-source-editor withmd-source-readonly">{sourceValue}</pre>
+        </div>
+      );
+    }
+
     return (
-      <SourceEditor
-        value={sourceValue}
-        isDirty={sourceDirty}
-        isSaving={sourceSaving}
-        canApply={canApplySource}
-        onChange={onSourceChange}
-        onApply={onApplySource}
-        onSave={onSaveSource}
-        onDiscard={onDiscardSource}
-      />
+      <div ref={sourceContainerRef} className="withmd-column withmd-fill withmd-gap-3">
+        <SourceEditor
+          value={sourceValue}
+          isDirty={sourceDirty}
+          isSaving={sourceSaving}
+          canApply={canApplySource}
+          onChange={onSourceChange}
+          onApply={onApplySource}
+          onSave={onSaveSource}
+          onDiscard={onDiscardSource}
+        />
+      </div>
     );
   }
 
-  if (mode === 'edit') {
+  if (editing) {
     return (
-      <CollabEditor
-        mdFileId={mdFileId}
-        content={readContent}
-        authToken="local-dev-token"
-        focusedComment={focusedComment}
-        focusRequestId={focusRequestId}
-        onContentChange={onEditorContentChange}
-        onSelectionDraftChange={onSelectionDraftChange}
-        markRequest={markRequest}
-        onMarkRequestApplied={onMarkRequestApplied}
-      />
+      <div ref={editContainerRef} className="withmd-column withmd-fill">
+        <CollabEditor
+          mdFileId={mdFileId}
+          content={readContent}
+          authToken="local-dev-token"
+          focusedComment={focusedComment}
+          focusRequestId={focusRequestId}
+          onContentChange={onEditorContentChange}
+          onSelectionDraftChange={onSelectionDraftChange}
+          markRequest={markRequest}
+          onMarkRequestApplied={onMarkRequestApplied}
+          initialCursorHint={cursorHint ?? undefined}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="withmd-fill withmd-doc-scroll">
+    <div className="withmd-fill withmd-doc-scroll" onClick={handleReadClick}>
       <ReadRenderer
         content={readContent}
         comments={comments}

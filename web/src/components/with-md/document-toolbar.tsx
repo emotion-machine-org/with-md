@@ -1,6 +1,6 @@
 'use client';
 
-import type { DocMode } from '@/lib/with-md/types';
+import type { UserMode } from '@/lib/with-md/types';
 
 interface AuthUser {
   userId: string;
@@ -9,13 +9,12 @@ interface AuthUser {
 }
 
 interface Props {
-  mode: DocMode;
-  canUseEditMode: boolean;
+  userMode: UserMode;
+  canUseRichEdit: boolean;
   syntaxReasons: string[];
   statusMessage: string | null;
-  collabActive: boolean;
   user?: AuthUser;
-  onModeChange(next: DocMode): void;
+  onUserModeChange(next: UserMode): void;
   onPush(): void;
   onResync(): void;
   onDownload?(): void;
@@ -64,13 +63,12 @@ function cycleBackground() {
 }
 
 export default function DocumentToolbar({
-  mode,
-  canUseEditMode,
+  userMode,
+  canUseRichEdit,
   syntaxReasons,
   statusMessage,
-  collabActive,
   user,
-  onModeChange,
+  onUserModeChange,
   onPush,
   onResync,
   onDownload,
@@ -81,21 +79,12 @@ export default function DocumentToolbar({
   return (
     <header className="withmd-dock-wrap">
       <div className="withmd-dock">
-        <button type="button" className={modeClass(mode === 'read')} onClick={() => onModeChange('read')} aria-label="Read">
-          <ReadIcon />
-          <span className="withmd-dock-tooltip">Read</span>
-        </button>
         <button
           type="button"
-          className={modeClass(mode === 'edit')}
-          onClick={() => onModeChange('edit')}
-          disabled={!canUseEditMode}
-          aria-label="Edit"
+          className={modeClass(userMode === 'source')}
+          onClick={() => onUserModeChange(userMode === 'source' ? 'document' : 'source')}
+          aria-label="Source"
         >
-          <EditIcon />
-          <span className="withmd-dock-tooltip">Edit</span>
-        </button>
-        <button type="button" className={modeClass(mode === 'source')} onClick={() => onModeChange('source')} aria-label="Source">
           <CodeIcon />
           <span className="withmd-dock-tooltip">Source</span>
         </button>
@@ -144,7 +133,7 @@ export default function DocumentToolbar({
         )}
       </div>
 
-      {!canUseEditMode && (
+      {!canUseRichEdit && (
         <p className="withmd-warning withmd-mt-2 withmd-dock-note">
           Rich edit disabled due to unsupported syntax: {syntaxLabel}.
         </p>

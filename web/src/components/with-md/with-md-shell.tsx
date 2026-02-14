@@ -101,14 +101,20 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   }, [currentFile?.mdFileId]);
 
   const syntaxSupported = currentFile?.syntaxSupportStatus !== 'unsupported';
-  const { mode, setMode, canUseEditMode } = useDocMode(syntaxSupported, 'read');
+  const { userMode, editing, setUserMode, activateEditing, deactivateEditing, canUseRichEdit } = useDocMode(syntaxSupported);
   const sourceDirty = Boolean(currentFile && hasMeaningfulDiff(sourceValue, currentFile.content));
 
   useEffect(() => {
-    if (mode === 'source') {
+    if (userMode === 'source') {
       setPendingSelection(null);
     }
-  }, [mode]);
+  }, [userMode]);
+
+  useEffect(() => {
+    if (editing) {
+      setPendingSelection(null);
+    }
+  }, [editing]);
 
   const anchorMap = useCommentAnchors(currentFile?.content ?? '', comments);
 
@@ -162,10 +168,10 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       contentHash: `applied_${Date.now()}`,
     });
     setStatusMessage('Source applied to local document. Save to persist.');
-    if (canUseEditMode) {
-      setMode('edit');
+    if (canUseRichEdit) {
+      setUserMode('document');
     }
-  }, [canUseEditMode, currentFile, setMode, sourceValue]);
+  }, [canUseRichEdit, currentFile, setUserMode, sourceValue]);
 
   const onDiscardSource = useCallback(() => {
     if (!currentFile) return;
@@ -174,7 +180,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   }, [currentFile]);
 
   useEffect(() => {
-    if (!currentFile || mode !== 'edit') return;
+    if (!currentFile || !(editing && userMode === 'document')) return;
     if (currentFile.content === savedContent) return;
 
     const timeout = window.setTimeout(async () => {
@@ -195,7 +201,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [currentFile, mode, reloadActivity, savedContent]);
+  }, [currentFile, editing, userMode, reloadActivity, savedContent]);
 
   const onCreateComment = useCallback(
     async (input: { body: string; selection: CommentSelectionDraft | null }) => {
@@ -244,15 +250,15 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     (comment: CommentRecord) => {
       setActiveCommentId(comment.id);
       setFocusRequestId((prev) => prev + 1);
-      if (mode === 'source') {
-        setMode('read');
+      if (userMode === 'source') {
+        setUserMode('document');
       }
       if (!commentsOpen) {
         setCommentsOpen(true);
         setFilesOpen(false);
       }
     },
-    [commentsOpen, mode, setMode],
+    [commentsOpen, userMode, setUserMode],
   );
 
   const onPush = useCallback(async () => {
@@ -377,13 +383,12 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         <section className="withmd-center">
           <section className="withmd-doc-shell">
             <DocumentToolbar
-              mode={mode}
-              canUseEditMode={canUseEditMode}
+              userMode={userMode}
+              canUseRichEdit={canUseRichEdit}
               syntaxReasons={currentFile.syntaxSupportReasons ?? []}
               statusMessage={statusMessage}
-              collabActive={mode === 'edit'}
               user={user ?? undefined}
-              onModeChange={setMode}
+              onUserModeChange={setUserMode}
               onPush={onPush}
               onResync={onResync}
               onDownload={() => {
@@ -406,7 +411,8 @@ export default function WithMdShell({ repoId, filePath }: Props) {
               <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill">
                 <DocumentSurface
                   mdFileId={currentFile.mdFileId}
-                  mode={mode}
+                  userMode={userMode}
+                  editing={editing}
                   readContent={currentFile.content}
                   comments={comments}
                   focusedCommentId={activeComment?.id ?? null}
@@ -416,7 +422,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   sourceValue={sourceValue}
                   sourceDirty={sourceDirty}
                   sourceSaving={isSavingSource}
-                  canApplySource={canUseEditMode}
+                  canApplySource={canUseRichEdit}
                   onSourceChange={setSourceValue}
                   onApplySource={onApplySource}
                   onSaveSource={onSaveSource}
@@ -432,6 +438,8 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   onMarkRequestApplied={(requestId) => {
                     setMarkRequest((prev) => (prev?.requestId === requestId ? null : prev));
                   }}
+                  onActivateEditing={activateEditing}
+                  onDeactivateEditing={deactivateEditing}
                 />
               </div>
             </div>

@@ -1,6 +1,14 @@
 export type DocMode = 'read' | 'edit' | 'source';
 
+/** User-facing mode toggle: document (rich) vs source (raw markdown) */
+export type UserMode = 'document' | 'source';
+
 export type SyntaxSupportStatus = 'unknown' | 'supported' | 'unsupported';
+
+export interface CursorHint {
+  sourceLine?: number;
+  textFragment?: string;
+}
 
 export type FileCategory =
   | 'readme'

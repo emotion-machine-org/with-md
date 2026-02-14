@@ -10,7 +10,7 @@ import { buildEditorExtensions } from '@/components/with-md/tiptap/editor-extens
 import { useCollabDoc } from '@/hooks/with-md/use-collab-doc';
 import { extractHeadingPathAtIndex, findAllIndices, lineNumberAtIndex } from '@/lib/with-md/anchor';
 import { normalizeAsciiDiagramBlocks } from '@/lib/with-md/ascii-diagram';
-import type { CommentRecord, CommentSelectionDraft } from '@/lib/with-md/types';
+import type { CommentRecord, CommentSelectionDraft, CursorHint } from '@/lib/with-md/types';
 
 interface Props {
   mdFileId: string;
@@ -22,6 +22,7 @@ interface Props {
   onSelectionDraftChange(next: CommentSelectionDraft | null): void;
   markRequest: { requestId: number; commentMarkId: string; from: number; to: number } | null;
   onMarkRequestApplied(requestId: number): void;
+  initialCursorHint?: CursorHint;
 }
 
 function getEditorMarkdown(editor: unknown): string | null {
@@ -213,6 +214,7 @@ export default function CollabEditor({
   onSelectionDraftChange,
   markRequest,
   onMarkRequestApplied,
+  initialCursorHint,
 }: Props) {
   const realtimeRequested = process.env.NEXT_PUBLIC_WITHMD_ENABLE_REALTIME === '1';
   const realtimeExperimental = process.env.NEXT_PUBLIC_WITHMD_ENABLE_REALTIME_EXPERIMENTAL === '1';
@@ -390,6 +392,64 @@ export default function CollabEditor({
 
     focusEditorRange(editor, target.from, target.to);
   }, [editor, focusRequestId, focusedComment]);
+
+  const cursorHintAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!editor || cursorHintAppliedRef.current || !initialCursorHint) return;
+    cursorHintAppliedRef.current = true;
+
+    const { textFragment, sourceLine } = initialCursorHint;
+
+    // Try to place cursor near the text fragment the user clicked
+    if (textFragment) {
+      const range = findDomRangeByQuote(editor.view.dom, textFragment, 0);
+      if (range) {
+        try {
+          const pos = editor.view.posAtDOM(range.startContainer, range.startOffset);
+          (editor.commands as unknown as { focus: () => boolean; setTextSelection: (pos: number) => boolean })
+            .focus();
+          (editor.commands as unknown as { setTextSelection: (pos: number) => boolean })
+            .setTextSelection(pos);
+          editor.view.dispatch(editor.state.tr.scrollIntoView());
+          return;
+        } catch {
+          // fall through to sourceLine
+        }
+      }
+    }
+
+    // Fallback: place cursor at the start of the approximate source line
+    if (typeof sourceLine === 'number') {
+      let lineCount = 1;
+      let targetPos = 1;
+      editor.state.doc.descendants((node, pos) => {
+        if (targetPos > 1) return false;
+        if (node.isBlock && node.isLeaf) {
+          if (lineCount >= sourceLine) {
+            targetPos = pos + 1;
+            return false;
+          }
+          lineCount += 1;
+        } else if (node.isBlock && !node.isLeaf) {
+          if (lineCount >= sourceLine) {
+            targetPos = pos + 1;
+            return false;
+          }
+          lineCount += 1;
+        }
+        return true;
+      });
+      (editor.commands as unknown as { focus: () => boolean; setTextSelection: (pos: number) => boolean })
+        .focus();
+      (editor.commands as unknown as { setTextSelection: (pos: number) => boolean })
+        .setTextSelection(Math.min(targetPos, editor.state.doc.content.size));
+      editor.view.dispatch(editor.state.tr.scrollIntoView());
+      return;
+    }
+
+    // No hint: just focus the editor
+    (editor.commands as unknown as { focus: () => boolean }).focus();
+  }, [editor, initialCursorHint]);
 
   if (!editor) {
     return <p className="withmd-muted-sm">Loading editor...</p>;
