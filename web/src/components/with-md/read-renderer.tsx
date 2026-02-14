@@ -8,12 +8,115 @@ import remarkGfm from 'remark-gfm';
 
 import {
   extractHeadingPathAtIndex,
-  findAllIndices,
   findApproximateQuoteInMarkdown,
   findSectionByHeadingPath,
   lineNumberAtIndex,
+  pickBestQuoteIndex,
 } from '@/lib/with-md/anchor';
 import type { AnchorMatch, CommentRecord, CommentSelectionDraft } from '@/lib/with-md/types';
+
+/* ------------------------------------------------------------------ */
+/*  Rehype plugin: inject <mark> elements for comment highlights      */
+/* ------------------------------------------------------------------ */
+
+interface HighlightRange {
+  start: number;
+  end: number;
+  commentId: string;
+}
+
+interface HastText {
+  type: 'text';
+  value: string;
+  position?: { start?: { offset?: number }; end?: { offset?: number } };
+}
+
+interface HastElement {
+  type: 'element';
+  tagName: string;
+  properties?: Record<string, unknown>;
+  children: HastNode[];
+}
+
+type HastNode = HastText | HastElement | { type: string; children?: HastNode[] };
+
+function collectTextNodes(
+  node: HastNode,
+  out: Array<{ node: HastText; index: number; parent: HastElement }>,
+  insideCode = false,
+) {
+  if (!('children' in node) || !node.children) return;
+  const el = node as HastElement;
+  const isCode = el.tagName === 'code' || el.tagName === 'pre';
+
+  for (let i = 0; i < el.children.length; i++) {
+    const child = el.children[i];
+    if (child.type === 'text' && !insideCode) {
+      out.push({ node: child as HastText, index: i, parent: el });
+    } else {
+      collectTextNodes(child, out, insideCode || isCode);
+    }
+  }
+}
+
+function rehypeCommentHighlights(ranges: HighlightRange[]) {
+  return (tree: HastNode) => {
+    if (ranges.length === 0) return;
+
+    const sorted = [...ranges].sort((a, b) => a.start - b.start);
+    const textNodes: Array<{ node: HastText; index: number; parent: HastElement }> = [];
+    collectTextNodes(tree, textNodes);
+
+    // Process in reverse so splicing doesn't shift indices
+    for (let t = textNodes.length - 1; t >= 0; t--) {
+      const { node, index, parent } = textNodes[t];
+      const pos = node.position;
+      const nodeStart = pos?.start?.offset;
+      const nodeEnd = pos?.end?.offset;
+      if (nodeStart === undefined || nodeEnd === undefined) continue;
+
+      const text = node.value;
+
+      // Find highlight ranges that overlap this text node
+      const overlapping = sorted.filter((r) => r.start < nodeEnd && r.end > nodeStart);
+      if (overlapping.length === 0) continue;
+
+      const replacements: HastNode[] = [];
+      let cursor = 0;
+
+      for (const range of overlapping) {
+        const hlStart = Math.max(0, range.start - nodeStart);
+        const hlEnd = Math.min(text.length, range.end - nodeStart);
+        if (hlEnd <= hlStart) continue;
+
+        if (hlStart > cursor) {
+          replacements.push({ type: 'text', value: text.slice(cursor, hlStart) } as HastText);
+        }
+
+        replacements.push({
+          type: 'element',
+          tagName: 'mark',
+          properties: { className: ['withmd-comment-highlight'], dataCommentId: range.commentId },
+          children: [{ type: 'text', value: text.slice(hlStart, hlEnd) } as HastText],
+        } as HastElement);
+
+        cursor = hlEnd;
+      }
+
+      if (cursor < text.length) {
+        replacements.push({ type: 'text', value: text.slice(cursor) } as HastText);
+      }
+
+      if (replacements.length > 0) {
+        parent.children.splice(index, 1, ...replacements);
+      }
+    }
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Props & helpers                                                    */
+/* ------------------------------------------------------------------ */
 
 interface Props {
   content: string;
@@ -31,60 +134,6 @@ interface Props {
   onResolveThread(commentIds: string[]): Promise<void>;
 }
 
-function findDomRangeByQuote(root: HTMLElement, quote: string, occurrence = 0): Range | null {
-  if (!quote.trim()) return null;
-
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes: Text[] = [];
-  const lengths: number[] = [];
-  let combined = '';
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode as Text;
-    nodes.push(node);
-    lengths.push(combined.length);
-    combined += node.nodeValue ?? '';
-  }
-
-  let hit = -1;
-  let searchFrom = 0;
-  for (let i = 0; i <= occurrence; i += 1) {
-    const next = combined.indexOf(quote, searchFrom);
-    if (next < 0) break;
-    hit = next;
-    searchFrom = next + Math.max(1, quote.length);
-  }
-  if (hit < 0) return null;
-  const end = hit + quote.length;
-
-  let startNodeIndex = -1;
-  let endNodeIndex = -1;
-  let startOffset = 0;
-  let endOffset = 0;
-
-  for (let i = 0; i < nodes.length; i += 1) {
-    const startBase = lengths[i];
-    const value = nodes[i].nodeValue ?? '';
-    const stop = startBase + value.length;
-    if (startNodeIndex < 0 && hit >= startBase && hit <= stop) {
-      startNodeIndex = i;
-      startOffset = hit - startBase;
-    }
-    if (endNodeIndex < 0 && end >= startBase && end <= stop) {
-      endNodeIndex = i;
-      endOffset = end - startBase;
-      break;
-    }
-  }
-
-  if (startNodeIndex < 0 || endNodeIndex < 0) return null;
-
-  const range = document.createRange();
-  range.setStart(nodes[startNodeIndex], startOffset);
-  range.setEnd(nodes[endNodeIndex], endOffset);
-  return range;
-}
-
 function setCssHighlightByName(name: string, range: Range | null) {
   const cssAny = (window as unknown as { CSS?: { highlights?: Map<string, unknown> } }).CSS;
   const highlightCtor = (window as unknown as { Highlight?: new (...args: Range[]) => unknown }).Highlight;
@@ -94,17 +143,6 @@ function setCssHighlightByName(name: string, range: Range | null) {
   if (!range || !highlightCtor) return;
 
   cssAny.highlights.set(name, new highlightCtor(range));
-}
-
-function setCssHighlight(range: Range | null) {
-  const cssAny = (window as unknown as { CSS?: { highlights?: Map<string, unknown> } }).CSS;
-  const highlightCtor = (window as unknown as { Highlight?: new (...args: Range[]) => unknown }).Highlight;
-  if (!cssAny?.highlights) return;
-
-  cssAny.highlights.delete('withmd-active-comment');
-  if (!range || !highlightCtor) return;
-
-  cssAny.highlights.set('withmd-active-comment', new highlightCtor(range));
 }
 
 function findClosestSourceLineElement(root: HTMLElement, targetLine: number): HTMLElement | null {
@@ -174,15 +212,6 @@ function extractHeadingPathFromDom(root: HTMLElement, startNode: Node): string[]
   return [];
 }
 
-function anchorLabel(comment: CommentRecord): string {
-  const path = comment.anchor.anchorHeadingPath;
-  if (path.length > 0) {
-    const last = path[path.length - 1];
-    return path.length > 1 ? `${path[0]} / ... / ${last}` : last;
-  }
-  return `Line ${comment.anchor.fallbackLine}`;
-}
-
 function rootCommentId(byId: Map<string, CommentRecord>, comment: CommentRecord): string {
   let current = comment;
   while (current.parentCommentId) {
@@ -196,6 +225,10 @@ function rootCommentId(byId: Map<string, CommentRecord>, comment: CommentRecord)
 function estimatedThreadHeight(messageCount: number): number {
   return 90 + Math.min(6, messageCount) * 34 + 56;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
 
 export default function ReadRenderer({
   content,
@@ -218,6 +251,34 @@ export default function ReadRenderer({
   const [replyingThreadId, setReplyingThreadId] = useState<string | null>(null);
   const [lineAnchors, setLineAnchors] = useState<Array<{ line: number; top: number }>>([]);
 
+  // ---- Compute highlight ranges for the rehype plugin ----
+  const commentHighlightRanges = useMemo(() => {
+    const ranges: HighlightRange[] = [];
+    const byId = new Map(comments.map((c) => [c.id, c]));
+    const seen = new Set<string>();
+
+    for (const comment of comments) {
+      const threadId = rootCommentId(byId, comment);
+      if (seen.has(threadId)) continue;
+      seen.add(threadId);
+
+      const root = byId.get(threadId) ?? comment;
+      const anchor = anchorByCommentId.get(root.id);
+      if (!anchor || anchor.end <= anchor.start) continue;
+
+      ranges.push({ start: anchor.start, end: anchor.end, commentId: root.id });
+    }
+
+    return ranges;
+  }, [comments, anchorByCommentId]);
+
+  // ---- Rehype plugin (new ref each time ranges change → ReactMarkdown re-processes) ----
+  const rehypePlugins = useMemo(() => {
+    if (commentHighlightRanges.length === 0) return [];
+    return [() => rehypeCommentHighlights(commentHighlightRanges)];
+  }, [commentHighlightRanges]);
+
+  // ---- Markdown components with data-source-line ----
   const markdownComponents = useMemo(() => {
     type SourceTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'p' | 'li' | 'pre' | 'blockquote' | 'table' | 'tr' | 'hr';
     const withSourceLine = (tag: SourceTag) =>
@@ -255,6 +316,7 @@ export default function ReadRenderer({
     [comments, focusedCommentId],
   );
 
+  // ---- Measure line positions for comment rail ----
   useEffect(() => {
     const root = markdownRef.current;
     if (!root) return;
@@ -302,6 +364,7 @@ export default function ReadRenderer({
     };
   }, [lineAnchors]);
 
+  // ---- Position comment threads in the rail ----
   const positionedThreads = useMemo(() => {
     const byId = new Map(comments.map((comment) => [comment.id, comment]));
     const grouped = new Map<string, CommentRecord[]>();
@@ -340,13 +403,53 @@ export default function ReadRenderer({
       return { ...thread, top: adjustedTop };
     });
   }, [activeCommentId, anchorByCommentId, comments, content, findTopByLine]);
+
   const draftTop = useMemo(() => {
     if (!pendingSelection) return null;
     const line = pendingSelection.fallbackLine;
     return findTopByLine(line);
   }, [findTopByLine, pendingSelection]);
+
   const hasPositionedThreads = positionedThreads.length > 0 || Boolean(pendingSelection);
 
+  // ---- Focused comment: toggle .is-focused class + scroll ----
+  useEffect(() => {
+    const root = markdownRef.current;
+    if (!root) return;
+
+    // Clear previous focus
+    root.querySelectorAll<HTMLElement>('.withmd-comment-highlight.is-focused')
+      .forEach((el) => el.classList.remove('is-focused'));
+
+    if (!focusedComment) return;
+
+    // Find the root comment ID for this thread
+    const byId = new Map(comments.map((c) => [c.id, c]));
+    const threadRootId = rootCommentId(byId, focusedComment);
+
+    // Add .is-focused to all marks for this thread
+    const marks = root.querySelectorAll<HTMLElement>(
+      `.withmd-comment-highlight[data-comment-id="${threadRootId}"]`,
+    );
+    marks.forEach((el) => el.classList.add('is-focused'));
+
+    // Scroll to the anchor
+    const preferredLine = focusedAnchorMatch
+      ? lineNumberAtIndex(content, focusedAnchorMatch.start)
+      : focusedComment.anchor.fallbackLine;
+    const anchorElement = Number.isFinite(preferredLine)
+      ? findClosestSourceLineElement(root, preferredLine)
+      : null;
+
+    if (anchorElement) {
+      flashAnchorElement(root, anchorElement);
+      anchorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (marks.length > 0) {
+      marks[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [comments, content, focusRequestId, focusedAnchorMatch, focusedComment]);
+
+  // ---- Selection draft (for creating new comments) ----
   useEffect(() => {
     const root = markdownRef.current;
     if (!root) return;
@@ -372,9 +475,17 @@ export default function ReadRenderer({
       }
 
       const domHeadingPath = extractHeadingPathFromDom(root, range.startContainer);
-      const exactMatches = findAllIndices(content, textQuote);
+      const startEl = range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? (range.startContainer as Element)
+        : range.startContainer.parentElement;
+      const sourceLineAttr = startEl?.closest('[data-source-line]')?.getAttribute('data-source-line');
+      const domSourceLine = sourceLineAttr ? parseInt(sourceLineAttr, 10) : undefined;
+      const bestExact = pickBestQuoteIndex(content, textQuote, {
+        fallbackLine: domSourceLine,
+        anchorHeadingPath: domHeadingPath,
+      });
       let approximate = null as ReturnType<typeof findApproximateQuoteInMarkdown>;
-      if (exactMatches.length === 0 && domHeadingPath.length > 0) {
+      if (typeof bestExact !== 'number' && domHeadingPath.length > 0) {
         const section = findSectionByHeadingPath(content, domHeadingPath);
         if (section) {
           const inSection = findApproximateQuoteInMarkdown(section.content, textQuote);
@@ -386,19 +497,22 @@ export default function ReadRenderer({
           }
         }
       }
-      if (exactMatches.length === 0 && !approximate) {
+      if (typeof bestExact !== 'number' && !approximate) {
         approximate = findApproximateQuoteInMarkdown(content, textQuote);
       }
-      const rangeStart = exactMatches[0] ?? approximate?.start;
-      const rangeEnd = typeof exactMatches[0] === 'number'
-        ? exactMatches[0] + textQuote.length
+      const rangeStart = bestExact ?? approximate?.start;
+      const rangeEnd = typeof bestExact === 'number'
+        ? bestExact + textQuote.length
         : approximate?.end;
+
       const fallbackSection = domHeadingPath.length > 0 ? findSectionByHeadingPath(content, domHeadingPath) : null;
       const fallbackLine = typeof rangeStart === 'number'
         ? lineNumberAtIndex(content, rangeStart)
-        : fallbackSection
-          ? lineNumberAtIndex(content, fallbackSection.start)
-          : 1;
+        : typeof domSourceLine === 'number' && Number.isFinite(domSourceLine)
+          ? domSourceLine
+          : fallbackSection
+            ? lineNumberAtIndex(content, fallbackSection.start)
+            : 1;
 
       const anchorPrefix = typeof rangeStart === 'number'
         ? content.slice(Math.max(0, rangeStart - 32), rangeStart)
@@ -441,52 +555,8 @@ export default function ReadRenderer({
     return () => {
       root.removeEventListener('mouseup', updateSelectionDraft);
       root.removeEventListener('keyup', updateSelectionDraft);
-      setCssHighlight(null);
     };
   }, [content, onSelectionDraftChange]);
-
-  useEffect(() => {
-    const root = markdownRef.current;
-    if (!root || !focusedComment) {
-      setCssHighlight(null);
-      return;
-    }
-
-    let didScroll = false;
-    const preferredLine = focusedAnchorMatch
-      ? lineNumberAtIndex(content, focusedAnchorMatch.start)
-      : focusedComment.anchor.fallbackLine;
-    const anchorElement = Number.isFinite(preferredLine)
-      ? findClosestSourceLineElement(root, preferredLine)
-      : null;
-    if (anchorElement) {
-      flashAnchorElement(root, anchorElement);
-      anchorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      didScroll = true;
-    }
-
-    const quote = focusedComment.anchor.textQuote;
-    const matches = findAllIndices(content, quote);
-    const preferredStart = focusedAnchorMatch?.start ?? focusedComment.anchor.rangeStart;
-    let occurrence = 0;
-    if (typeof preferredStart === 'number' && matches.length > 1) {
-      const nearest = matches
-        .map((value, idx) => ({ idx, delta: Math.abs(value - preferredStart) }))
-        .sort((a, b) => a.delta - b.delta)[0];
-      occurrence = nearest?.idx ?? 0;
-    }
-
-    const range = findDomRangeByQuote(root, quote, occurrence);
-    if (range) {
-      setCssHighlight(range);
-      if (!didScroll) {
-        const marker = range.startContainer.parentElement ?? root;
-        marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    } else {
-      setCssHighlight(null);
-    }
-  }, [content, focusRequestId, focusedAnchorMatch, focusedComment]);
 
   useEffect(() => {
     if (!pendingSelection) {
@@ -498,7 +568,7 @@ export default function ReadRenderer({
   return (
     <div className="withmd-read-layout">
       <article ref={markdownRef} className="withmd-prose withmd-markdown">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} components={markdownComponents}>{content}</ReactMarkdown>
       </article>
       {hasPositionedThreads && (
         <aside className="withmd-comment-rail withmd-comment-rail-floating" aria-label="Anchored comment threads">

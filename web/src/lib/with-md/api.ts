@@ -1,6 +1,6 @@
 import { ConvexHttpClient } from 'convex/browser';
 
-import { extractHeadingPathAtIndex } from '@/lib/with-md/anchor';
+import { extractHeadingPathAtIndex, pickBestQuoteIndex } from '@/lib/with-md/anchor';
 import { WITH_MD_CONVEX_FUNCTIONS } from '@/lib/with-md/convex-functions';
 import { detectUnsupportedSyntax } from '@/lib/with-md/syntax';
 import type {
@@ -260,11 +260,29 @@ const convexApi: WithMdApi = {
     const file = await this.getFile(input.mdFileId);
     if (!file) throw new Error('File not found');
 
-    const firstQuoteIndex = input.textQuote ? file.content.indexOf(input.textQuote) : -1;
-    const anchorAt = typeof input.rangeStart === 'number'
+    const bestQuoteIndex = input.textQuote
+      ? pickBestQuoteIndex(file.content, input.textQuote, {
+          fallbackLine: input.fallbackLine,
+          preferredStart: input.rangeStart,
+          anchorPrefix: input.anchorPrefix,
+          anchorSuffix: input.anchorSuffix,
+          anchorHeadingPath: input.anchorHeadingPath,
+        })
+      : undefined;
+
+    const persistedRangeStart = typeof input.rangeStart === 'number'
       ? input.rangeStart
-      : firstQuoteIndex >= 0
-        ? firstQuoteIndex
+      : bestQuoteIndex;
+    const persistedRangeEnd = typeof input.rangeEnd === 'number'
+      ? input.rangeEnd
+      : (typeof persistedRangeStart === 'number' && input.textQuote
+        ? persistedRangeStart + input.textQuote.length
+        : undefined);
+
+    const anchorAt = typeof persistedRangeStart === 'number'
+      ? persistedRangeStart
+      : typeof bestQuoteIndex === 'number'
+        ? bestQuoteIndex
         : indexFromLineNumber(file.content, input.fallbackLine);
 
     const row = await mutateConvex<WithMdCommentRow>(WITH_MD_CONVEX_FUNCTIONS.mutations.commentsCreate, {
@@ -279,8 +297,8 @@ const convexApi: WithMdApi = {
         input.anchorSuffix ?? file.content.slice(anchorAt, Math.min(anchorAt + 32, file.content.length)),
       anchorHeadingPath: input.anchorHeadingPath ?? extractHeadingPathAtIndex(file.content, anchorAt),
       fallbackLine: input.fallbackLine,
-      rangeStart: input.rangeStart,
-      rangeEnd: input.rangeEnd,
+      rangeStart: persistedRangeStart,
+      rangeEnd: persistedRangeEnd,
     });
 
     return mapComment(row);

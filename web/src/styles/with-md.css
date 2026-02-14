@@ -9,6 +9,7 @@
   --withmd-muted: rgba(168, 162, 158, 0.58);
   --withmd-border: #292524;
   --withmd-comment: rgba(251, 191, 36, 0.34);
+  --withmd-comment-passive: rgba(251, 191, 36, 0.22);
   --withmd-glass-bg: rgba(255, 255, 255, 0.08);
   --withmd-glass-bg-hover: rgba(255, 255, 255, 0.14);
   --withmd-glass-bg-active: rgba(255, 255, 255, 0.20);
@@ -48,6 +49,7 @@
   --withmd-muted: rgba(87, 83, 78, 0.58);
   --withmd-border: #e7e5e4;
   --withmd-comment: rgba(180, 130, 40, 0.28);
+  --withmd-comment-passive: rgba(180, 130, 40, 0.18);
   --withmd-glass-bg: rgba(0, 0, 0, 0.04);
   --withmd-glass-bg-hover: rgba(0, 0, 0, 0.08);
   --withmd-glass-bg-active: rgba(0, 0, 0, 0.12);
@@ -637,6 +639,7 @@
 
 .withmd-comment-highlight {
   background: var(--withmd-comment);
+  color: inherit;
 }
 
 .withmd-anchor-focus {
@@ -1426,7 +1429,13 @@
   background: var(--withmd-dock-btn-hover);
 }
 
-::highlight(withmd-active-comment) {
+.withmd-comment-highlight {
+  background: var(--withmd-comment-passive);
+  border-radius: 2px;
+  color: inherit;
+}
+
+.withmd-comment-highlight.is-focused {
   background: var(--withmd-comment);
 }
 

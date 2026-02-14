@@ -8,7 +8,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 
 import { buildEditorExtensions } from '@/components/with-md/tiptap/editor-extensions';
 import { useCollabDoc } from '@/hooks/with-md/use-collab-doc';
-import { extractHeadingPathAtIndex, findAllIndices, lineNumberAtIndex } from '@/lib/with-md/anchor';
+import { extractHeadingPathAtIndex, findAllIndices, lineNumberAtIndex, pickBestQuoteIndex } from '@/lib/with-md/anchor';
 import { normalizeAsciiDiagramBlocks } from '@/lib/with-md/ascii-diagram';
 import type { CommentRecord, CommentSelectionDraft, CursorHint } from '@/lib/with-md/types';
 
@@ -288,8 +288,14 @@ export default function CollabEditor({
       }
 
       const markdown = getEditorMarkdown(nextEditor) ?? content;
-      const matches = findAllIndices(markdown, textQuote);
-      const rangeStart = matches[0];
+      const provisionalStart = findAllIndices(markdown, textQuote)[0];
+      const provisionalLine = typeof provisionalStart === 'number'
+        ? lineNumberAtIndex(markdown, provisionalStart)
+        : undefined;
+      const rangeStart = pickBestQuoteIndex(markdown, textQuote, {
+        fallbackLine: provisionalLine,
+        preferredStart: provisionalStart,
+      });
       const rangeEnd = typeof rangeStart === 'number' ? rangeStart + textQuote.length : undefined;
       const fallbackLine = typeof rangeStart === 'number' ? lineNumberAtIndex(markdown, rangeStart) : 1;
       const anchorPrefix = typeof rangeStart === 'number'

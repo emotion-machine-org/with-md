@@ -76,6 +76,7 @@ export default function DocumentSurface({
   const editContainerRef = useRef<HTMLDivElement>(null);
   const readLayerRef = useRef<HTMLDivElement>(null);
   const sourceContainerRef = useRef<HTMLDivElement>(null);
+  const skipNextClickRef = useRef(false);
   const [cursorHint, setCursorHint] = useState<CursorHint | null>(null);
   const [cursorHintKey, setCursorHintKey] = useState(0);
 
@@ -119,8 +120,22 @@ export default function DocumentSurface({
     }
   }, [editing, userMode]);
 
+  // mousedown fires BEFORE the browser clears the native selection.
+  // If there was an active selection (from highlighting for a comment),
+  // set a flag to prevent the subsequent click from activating edit mode.
+  const handleReadMouseDown = useCallback(() => {
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      skipNextClickRef.current = true;
+    }
+  }, []);
+
   const handleReadClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      if (skipNextClickRef.current) {
+        skipNextClickRef.current = false;
+        return;
+      }
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) return;
 
@@ -236,6 +251,7 @@ export default function DocumentSurface({
       <div
         ref={readLayerRef}
         className={`withmd-surface-layer withmd-doc-scroll ${editing ? 'withmd-surface-hidden' : ''}`}
+        onMouseDown={handleReadMouseDown}
         onClick={handleReadClick}
       >
         <ReadRenderer

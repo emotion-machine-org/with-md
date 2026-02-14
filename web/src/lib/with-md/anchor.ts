@@ -6,6 +6,25 @@ function span(start: number, len: number): AnchorMatch {
   return { start, end: start + len };
 }
 
+function indexAtLine(markdown: string, line: number): number {
+  if (!Number.isFinite(line) || line <= 1) return 0;
+  let currentLine = 1;
+  for (let i = 0; i < markdown.length; i += 1) {
+    if (currentLine >= line) return i;
+    if (markdown[i] === '\n') currentLine += 1;
+  }
+  return markdown.length;
+}
+
+function lineSpan(markdown: string, line: number): AnchorMatch | null {
+  const start = indexAtLine(markdown, line);
+  if (start < 0 || start > markdown.length) return null;
+  let end = markdown.indexOf('\n', start);
+  if (end === -1) end = markdown.length;
+  if (end <= start) return null;
+  return { start, end };
+}
+
 export function lineNumberAtIndex(markdown: string, index: number): number {
   if (index <= 0) return 1;
   return markdown.slice(0, Math.min(index, markdown.length)).split('\n').length;
@@ -65,6 +84,44 @@ function normalizeForSearch(input: string): NormalizedText {
   return { value, sourceIndexByNormalizedIndex };
 }
 
+/** Like normalizeForSearch but also strips markdown inline formatting (*, _, `, ~~). */
+function normalizeMarkdownForSearch(input: string): NormalizedText {
+  let value = '';
+  const sourceIndexByNormalizedIndex: number[] = [];
+  let lastWasSpace = false;
+  let i = 0;
+
+  while (i < input.length) {
+    const ch = input[i];
+
+    // Skip ~~ (strikethrough)
+    if (ch === '~' && input[i + 1] === '~') { i += 2; continue; }
+    // Skip * and _ (bold/italic markers)
+    if (ch === '*' || ch === '_') { i += 1; continue; }
+    // Skip ` (inline code marker)
+    if (ch === '`') { i += 1; continue; }
+
+    const raw = normalizeSearchChar(ch);
+    const isSpace = /\s/.test(raw);
+
+    if (isSpace) {
+      if (lastWasSpace) { i += 1; continue; }
+      value += ' ';
+      sourceIndexByNormalizedIndex.push(i);
+      lastWasSpace = true;
+      i += 1;
+      continue;
+    }
+
+    value += raw.toLowerCase();
+    sourceIndexByNormalizedIndex.push(i);
+    lastWasSpace = false;
+    i += 1;
+  }
+
+  return { value, sourceIndexByNormalizedIndex };
+}
+
 function normalizedEquals(a: string, b: string): boolean {
   return normalizeForSearch(a).value.trim() === normalizeForSearch(b).value.trim();
 }
@@ -72,8 +129,10 @@ function normalizedEquals(a: string, b: string): boolean {
 export function findApproximateQuoteInMarkdown(markdown: string, quote: string): AnchorMatch | null {
   if (!quote.trim()) return null;
 
-  const normalizedMarkdown = normalizeForSearch(markdown);
-  const normalizedQuote = normalizeForSearch(quote);
+  // Use markdown-aware normalization that strips *, _, `, ~~ so quotes
+  // spanning formatted text (e.g. "bold text" from "**bold** text") can match.
+  const normalizedMarkdown = normalizeMarkdownForSearch(markdown);
+  const normalizedQuote = normalizeMarkdownForSearch(quote);
   const needle = normalizedQuote.value.trim();
   if (!needle) return null;
 
@@ -103,6 +162,57 @@ export function contextScore(
   if (suffix && after.includes(suffix)) score += 2;
 
   return score;
+}
+
+export function pickBestQuoteIndex(
+  markdown: string,
+  quote: string,
+  options?: {
+    fallbackLine?: number;
+    preferredStart?: number;
+    anchorPrefix?: string;
+    anchorSuffix?: string;
+    anchorHeadingPath?: string[];
+  },
+): number | undefined {
+  const candidates = findAllIndices(markdown, quote);
+  if (candidates.length === 0) return undefined;
+  if (candidates.length === 1) return candidates[0];
+
+  const fallbackLine = options?.fallbackLine;
+  const preferredStart = options?.preferredStart;
+  const prefix = options?.anchorPrefix ?? '';
+  const suffix = options?.anchorSuffix ?? '';
+  const headingPath = options?.anchorHeadingPath ?? [];
+  const section = headingPath.length > 0 ? findSectionByHeadingPath(markdown, headingPath) : null;
+
+  let best: { index: number; score: number } | null = null;
+
+  for (const index of candidates) {
+    let score = 0;
+    score += contextScore(markdown, index, prefix, suffix) * 20;
+
+    if (typeof preferredStart === 'number') {
+      const delta = Math.abs(index - preferredStart);
+      score += Math.max(0, 220 - delta / 4);
+    }
+
+    if (typeof fallbackLine === 'number' && Number.isFinite(fallbackLine)) {
+      const lineDelta = Math.abs(lineNumberAtIndex(markdown, index) - fallbackLine);
+      score += Math.max(0, 160 - lineDelta * 18);
+    }
+
+    if (section) {
+      const inSection = index >= section.start && index < section.end;
+      if (inSection) score += 90;
+    }
+
+    if (!best || score > best.score) {
+      best = { index, score };
+    }
+  }
+
+  return best?.index;
 }
 
 export function extractHeadingPathAtIndex(markdown: string, index: number): string[] {
@@ -197,20 +307,15 @@ export function recoverAnchor(markdown: string, anchor: CommentAnchorSnapshot): 
 
   if (!quote) return null;
 
-  const exact = findAllIndices(markdown, quote);
-  if (exact.length === 1) {
-    return span(exact[0], quote.length);
-  }
-
-  if (exact.length > 1) {
-    const best = exact
-      .map((i) => ({
-        i,
-        score: contextScore(markdown, i, anchor.anchorPrefix, anchor.anchorSuffix),
-      }))
-      .sort((a, b) => b.score - a.score)[0];
-
-    return span(best.i, quote.length);
+  const bestExact = pickBestQuoteIndex(markdown, quote, {
+    fallbackLine: anchor.fallbackLine,
+    preferredStart: anchor.rangeStart,
+    anchorPrefix: anchor.anchorPrefix,
+    anchorSuffix: anchor.anchorSuffix,
+    anchorHeadingPath: anchor.anchorHeadingPath,
+  });
+  if (typeof bestExact === 'number') {
+    return span(bestExact, quote.length);
   }
 
   const section = findSectionByHeadingPath(markdown, anchor.anchorHeadingPath);
@@ -228,6 +333,11 @@ export function recoverAnchor(markdown: string, anchor: CommentAnchorSnapshot): 
 
   const approximate = findApproximateQuoteInMarkdown(markdown, quote);
   if (approximate) return approximate;
+
+  // Graceful approximation fallback for stubborn cases: highlight the recorded line.
+  // This keeps user-visible persistence even when exact/approx quote recovery fails.
+  const lineFallback = lineSpan(markdown, anchor.fallbackLine);
+  if (lineFallback) return lineFallback;
 
   return null;
 }
