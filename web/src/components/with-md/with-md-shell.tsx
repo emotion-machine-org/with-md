@@ -312,7 +312,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
     // Find the active repo to get installation details
     const repo = repos.find((r) => r.repoId === activeRepoId);
-    if (!repo || !repo.installationId || !repo.githubRepoId || !repo.defaultBranch) {
+    if (!repo || !repo.githubInstallationId || !repo.githubRepoId || !repo.defaultBranch) {
       // Fallback to old Convex resync
       await api.resync(activeRepoId);
       setStatusMessage('Re-sync complete.');
@@ -325,7 +325,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          installationId: Number(repo.installationId),
+          installationId: repo.githubInstallationId,
           owner: repo.owner,
           repo: repo.name,
           defaultBranch: repo.defaultBranch,

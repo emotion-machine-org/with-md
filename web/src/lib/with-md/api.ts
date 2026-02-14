@@ -40,6 +40,7 @@ interface WithMdRepoRow {
   installationId?: string;
   githubRepoId?: number;
   defaultBranch?: string;
+  githubInstallationId?: number | null;
 }
 
 interface WithMdFileRow {
@@ -132,6 +133,7 @@ function mapRepo(row: WithMdRepoRow): RepoSummary {
     installationId: row.installationId,
     githubRepoId: row.githubRepoId,
     defaultBranch: row.defaultBranch,
+    githubInstallationId: row.githubInstallationId ?? undefined,
   };
 }
 

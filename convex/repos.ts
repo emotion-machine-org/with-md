@@ -132,7 +132,16 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     const repos = await ctx.db.query('repos').collect();
-    return repos.sort((a, b) => `${a.owner}/${a.name}`.localeCompare(`${b.owner}/${b.name}`));
+    const enriched = await Promise.all(
+      repos.map(async (repo) => {
+        const installation = await ctx.db.get(repo.installationId);
+        return {
+          ...repo,
+          githubInstallationId: installation?.githubInstallationId ?? null,
+        };
+      }),
+    );
+    return enriched.sort((a, b) => `${a.owner}/${a.name}`.localeCompare(`${b.owner}/${b.name}`));
   },
 });
 
