@@ -628,6 +628,73 @@
   letter-spacing: 0.04em;
 }
 
+.withmd-table-block {
+  margin: 24px 0;
+  border: 1px dashed var(--withmd-border);
+  padding: 2px;
+  cursor: default;
+}
+
+.withmd-table-block table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: var(--withmd-glass-scrollbar) transparent;
+}
+
+.withmd-table-block th,
+.withmd-table-block td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--withmd-border);
+  text-align: left;
+  overflow-wrap: anywhere;
+  font-size: 17px;
+  line-height: 1.58;
+  color: var(--withmd-body);
+}
+
+.withmd-table-block th {
+  color: var(--withmd-text);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.withmd-table-block.ProseMirror-selectednode {
+  outline: 1px solid var(--withmd-primary-border);
+  border-color: var(--withmd-primary-border);
+}
+
+.withmd-table-block.is-editing {
+  border-style: solid;
+  border-color: var(--withmd-primary-border);
+  padding: 0;
+}
+
+.withmd-table-block-editor {
+  display: block;
+  width: 100%;
+  min-height: 80px;
+  border: 0;
+  background: var(--withmd-code-block-bg);
+  color: var(--withmd-text);
+  padding: 16px 20px;
+  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  white-space: pre;
+  overflow-x: auto;
+  tab-size: 4;
+}
+
 .withmd-landing {
   display: flex;
   justify-content: center;
