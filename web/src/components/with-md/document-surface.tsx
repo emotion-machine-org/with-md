@@ -86,18 +86,55 @@ export default function DocumentSurface({
 
       let sourceLine: number | undefined;
       let textFragment: string | undefined;
+      let offsetInFragment: number | undefined;
 
       const target = e.target as HTMLElement;
       const lineAttr = target.closest('[data-source-line]')?.getAttribute('data-source-line');
       if (lineAttr) {
         sourceLine = parseInt(lineAttr, 10);
       }
-      const textContent = target.textContent?.trim();
-      if (textContent && textContent.length > 2 && textContent.length < 200) {
-        textFragment = textContent;
+
+      // Get precise click position within text (cross-browser)
+      let caretNode: Node | null = null;
+      let clickOffset = 0;
+      if (typeof document.caretRangeFromPoint === 'function') {
+        const range = document.caretRangeFromPoint(e.clientX, e.clientY);
+        if (range) {
+          caretNode = range.startContainer;
+          clickOffset = range.startOffset;
+        }
+      } else if (typeof document.caretPositionFromPoint === 'function') {
+        const pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+        if (pos) {
+          caretNode = pos.offsetNode;
+          clickOffset = pos.offset;
+        }
+      }
+      if (caretNode && caretNode.nodeType === Node.TEXT_NODE) {
+        const fullText = (caretNode as Text).nodeValue ?? '';
+
+        // Extract a context window around the click point (up to 40 chars each side)
+        const ctxStart = Math.max(0, clickOffset - 40);
+        const ctxEnd = Math.min(fullText.length, clickOffset + 40);
+        const fragment = fullText.slice(ctxStart, ctxEnd).trim();
+
+        if (fragment.length > 2) {
+          textFragment = fragment;
+          // Offset within the trimmed fragment: account for trim and context window
+          const leadingTrimmed = fullText.slice(ctxStart, ctxEnd).length - fullText.slice(ctxStart, ctxEnd).trimStart().length;
+          offsetInFragment = clickOffset - ctxStart - leadingTrimmed;
+        }
       }
 
-      setCursorHint({ sourceLine, textFragment });
+      // Fallback: use the clicked element's text
+      if (!textFragment) {
+        const textContent = target.textContent?.trim();
+        if (textContent && textContent.length > 2 && textContent.length < 200) {
+          textFragment = textContent;
+        }
+      }
+
+      setCursorHint({ sourceLine, textFragment, offsetInFragment });
       onActivateEditing();
     },
     [onActivateEditing],

@@ -8,6 +8,7 @@ export type SyntaxSupportStatus = 'unknown' | 'supported' | 'unsupported';
 export interface CursorHint {
   sourceLine?: number;
   textFragment?: string;
+  offsetInFragment?: number;
 }
 
 export type FileCategory =

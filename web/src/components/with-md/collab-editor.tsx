@@ -110,6 +110,32 @@ function findMarkedRangeInDoc(doc: ProseMirrorNode, commentMarkId: string): { fr
   return { from: firstFrom, to: lastTo };
 }
 
+function domPointAtOffset(range: Range, charOffset: number): { node: Node; offset: number } | null {
+  const walker = document.createTreeWalker(
+    range.commonAncestorContainer,
+    NodeFilter.SHOW_TEXT,
+  );
+  let remaining = charOffset;
+  let node = walker.currentNode.nodeType === Node.TEXT_NODE ? walker.currentNode : walker.nextNode();
+  // Advance to the range start
+  while (node && !range.intersectsNode(node)) {
+    node = walker.nextNode();
+  }
+  while (node && range.intersectsNode(node)) {
+    const text = node as Text;
+    // How many chars of this node are inside the range?
+    const nodeStart = node === range.startContainer ? range.startOffset : 0;
+    const nodeEnd = node === range.endContainer ? range.endOffset : (text.nodeValue?.length ?? 0);
+    const available = nodeEnd - nodeStart;
+    if (remaining <= available) {
+      return { node, offset: nodeStart + remaining };
+    }
+    remaining -= available;
+    node = walker.nextNode();
+  }
+  return null;
+}
+
 function findDomRangeByQuote(root: HTMLElement, quote: string, occurrence = 0): Range | null {
   if (!quote.trim()) return null;
 
@@ -398,18 +424,29 @@ export default function CollabEditor({
     if (!editor || cursorHintAppliedRef.current || !initialCursorHint) return;
     cursorHintAppliedRef.current = true;
 
-    const { textFragment, sourceLine } = initialCursorHint;
+    const { textFragment, sourceLine, offsetInFragment } = initialCursorHint;
+    const commands = editor.commands as unknown as {
+      focus: () => boolean;
+      setTextSelection: (pos: number) => boolean;
+    };
 
-    // Try to place cursor near the text fragment the user clicked
+    // Try to place cursor at the precise position within the matched text
     if (textFragment) {
       const range = findDomRangeByQuote(editor.view.dom, textFragment, 0);
       if (range) {
         try {
-          const pos = editor.view.posAtDOM(range.startContainer, range.startOffset);
-          (editor.commands as unknown as { focus: () => boolean; setTextSelection: (pos: number) => boolean })
-            .focus();
-          (editor.commands as unknown as { setTextSelection: (pos: number) => boolean })
-            .setTextSelection(pos);
+          let targetPos: number;
+          if (typeof offsetInFragment === 'number' && offsetInFragment > 0) {
+            // Walk text nodes inside the match to find the exact DOM position
+            const domPoint = domPointAtOffset(range, offsetInFragment);
+            targetPos = domPoint
+              ? editor.view.posAtDOM(domPoint.node, domPoint.offset)
+              : editor.view.posAtDOM(range.startContainer, range.startOffset);
+          } else {
+            targetPos = editor.view.posAtDOM(range.startContainer, range.startOffset);
+          }
+          commands.focus();
+          commands.setTextSelection(targetPos);
           editor.view.dispatch(editor.state.tr.scrollIntoView());
           return;
         } catch {
@@ -420,35 +457,29 @@ export default function CollabEditor({
 
     // Fallback: place cursor at the start of the approximate source line
     if (typeof sourceLine === 'number') {
-      let lineCount = 1;
+      let blockCount = 0;
       let targetPos = 1;
+      let found = false;
       editor.state.doc.descendants((node, pos) => {
-        if (targetPos > 1) return false;
-        if (node.isBlock && node.isLeaf) {
-          if (lineCount >= sourceLine) {
+        if (found) return false;
+        if (node.isBlock) {
+          blockCount += 1;
+          if (blockCount >= sourceLine) {
             targetPos = pos + 1;
+            found = true;
             return false;
           }
-          lineCount += 1;
-        } else if (node.isBlock && !node.isLeaf) {
-          if (lineCount >= sourceLine) {
-            targetPos = pos + 1;
-            return false;
-          }
-          lineCount += 1;
         }
         return true;
       });
-      (editor.commands as unknown as { focus: () => boolean; setTextSelection: (pos: number) => boolean })
-        .focus();
-      (editor.commands as unknown as { setTextSelection: (pos: number) => boolean })
-        .setTextSelection(Math.min(targetPos, editor.state.doc.content.size));
+      commands.focus();
+      commands.setTextSelection(Math.min(targetPos, editor.state.doc.content.size));
       editor.view.dispatch(editor.state.tr.scrollIntoView());
       return;
     }
 
     // No hint: just focus the editor
-    (editor.commands as unknown as { focus: () => boolean }).focus();
+    commands.focus();
   }, [editor, initialCursorHint]);
 
   if (!editor) {
