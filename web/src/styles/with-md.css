@@ -659,6 +659,30 @@
   border-color: var(--withmd-primary-border);
 }
 
+.withmd-table-block.is-editing {
+  border-style: solid;
+  border-color: var(--withmd-primary-border);
+  padding: 0;
+}
+
+.withmd-table-block-editor {
+  display: block;
+  width: 100%;
+  min-height: 80px;
+  border: 0;
+  background: var(--withmd-code-block-bg);
+  color: var(--withmd-text);
+  padding: 16px 20px;
+  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  white-space: pre;
+  overflow-x: auto;
+  tab-size: 4;
+}
+
 .withmd-home-wrap {
   margin: 0 auto;
   min-height: 100vh;

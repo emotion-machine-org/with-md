@@ -33,24 +33,104 @@ export const TableBlock = Node.create({
   },
 
   addNodeView() {
-    return ({ node }) => {
+    return ({ node, editor, getPos }) => {
       const dom = document.createElement('div');
       dom.className = 'withmd-table-block';
       dom.contentEditable = 'false';
 
+      let editing = false;
+      let currentRaw = node.attrs.rawMarkdown as string;
+      let textarea: HTMLTextAreaElement | null = null;
+
       const renderTable = (raw: string) => {
+        currentRaw = raw;
         const html = marked.parse(raw || '', { gfm: true, async: false });
         dom.innerHTML = typeof html === 'string' ? html : '';
       };
 
-      renderTable(node.attrs.rawMarkdown as string);
+      const commitEdit = () => {
+        if (!editing || !textarea) return;
+        const newRaw = textarea.value;
+        editing = false;
+        textarea = null;
+        dom.classList.remove('is-editing');
+
+        const pos = typeof getPos === 'function' ? getPos() : null;
+        if (pos != null && newRaw !== currentRaw) {
+          const nodeAtPos = editor.state.doc.nodeAt(pos);
+          if (nodeAtPos) {
+            editor.view.dispatch(
+              editor.state.tr.setNodeMarkup(pos, undefined, {
+                ...nodeAtPos.attrs,
+                rawMarkdown: newRaw,
+              }),
+            );
+          }
+        }
+
+        renderTable(newRaw);
+      };
+
+      const cancelEdit = () => {
+        if (!editing) return;
+        editing = false;
+        textarea = null;
+        dom.classList.remove('is-editing');
+        renderTable(currentRaw);
+      };
+
+      const enterEdit = () => {
+        if (editing) return;
+        editing = true;
+        dom.innerHTML = '';
+        dom.classList.add('is-editing');
+
+        textarea = document.createElement('textarea');
+        textarea.className = 'withmd-table-block-editor';
+        textarea.value = currentRaw.replace(/\n+$/, '');
+        textarea.spellcheck = false;
+
+        textarea.addEventListener('blur', commitEdit);
+        textarea.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+            editor.commands.focus();
+          }
+        });
+
+        dom.appendChild(textarea);
+        textarea.focus();
+
+        // Auto-size to fit content
+        textarea.style.height = textarea.scrollHeight + 'px';
+      };
+
+      dom.addEventListener('dblclick', (e) => {
+        if (editing) return;
+        e.preventDefault();
+        enterEdit();
+      });
+
+      renderTable(currentRaw);
 
       return {
         dom,
         update(updatedNode) {
           if (updatedNode.type.name !== 'tableBlock') return false;
-          renderTable(updatedNode.attrs.rawMarkdown as string);
+          if (!editing) {
+            renderTable(updatedNode.attrs.rawMarkdown as string);
+          } else {
+            currentRaw = updatedNode.attrs.rawMarkdown as string;
+          }
           return true;
+        },
+        stopEvent(event: Event) {
+          if (editing && dom.contains(event.target as HTMLElement)) return true;
+          return false;
+        },
+        destroy() {
+          if (editing) commitEdit();
         },
       };
     };
