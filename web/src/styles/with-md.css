@@ -224,7 +224,9 @@
   resize: none;
 }
 
-.withmd-markdown {
+/* ── Shared prose typography (used by both ReadRenderer and ProseMirror) ── */
+
+.withmd-prose {
   font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
   color: var(--withmd-body);
   font-size: 17px;
@@ -234,27 +236,27 @@
   word-break: break-word;
 }
 
-.withmd-markdown h1,
-.withmd-markdown h2,
-.withmd-markdown h3,
-.withmd-markdown h4 {
+.withmd-prose h1,
+.withmd-prose h2,
+.withmd-prose h3,
+.withmd-prose h4 {
   font-family: 'Garamond', 'Apple Garamond', 'Iowan Old Style', 'Times New Roman', serif;
   color: var(--withmd-text);
   font-weight: 500;
 }
 
-.withmd-markdown h1 {
+.withmd-prose h1 {
   font-size: 42px;
   line-height: 1.12;
   letter-spacing: -0.015em;
   margin: 48px 0 28px;
 }
 
-.withmd-markdown h1:first-child {
+.withmd-prose h1:first-child {
   margin-top: 0;
 }
 
-.withmd-markdown h2 {
+.withmd-prose h2 {
   font-size: 26px;
   line-height: 1.25;
   margin: 48px 0 24px;
@@ -262,42 +264,46 @@
   border-bottom: 1px solid var(--withmd-border);
 }
 
-.withmd-markdown h1 + h2 {
+.withmd-prose h1 + h2 {
   margin-top: 24px;
 }
 
-.withmd-markdown h3 {
+.withmd-prose h3 {
   font-size: 21px;
   line-height: 1.3;
   margin: 36px 0 12px;
 }
 
-.withmd-markdown h4 {
+.withmd-prose h4 {
   font-size: 17px;
   line-height: 1.4;
   margin: 28px 0 8px;
   font-weight: 600;
 }
 
-.withmd-markdown p {
+.withmd-prose p {
   margin: 18px 0;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
-.withmd-markdown li {
+.withmd-prose li {
   margin: 8px 0;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
-.withmd-markdown strong,
-.withmd-markdown b {
+.withmd-prose li > p {
+  margin: 0;
+}
+
+.withmd-prose strong,
+.withmd-prose b {
   color: var(--withmd-text);
   font-weight: 600;
 }
 
-.withmd-markdown a {
+.withmd-prose a {
   color: var(--withmd-text);
   text-decoration: underline;
   text-decoration-color: var(--withmd-border);
@@ -305,11 +311,11 @@
   transition: text-decoration-color 160ms ease;
 }
 
-.withmd-markdown a:hover {
+.withmd-prose a:hover {
   text-decoration-color: var(--withmd-body);
 }
 
-.withmd-markdown blockquote {
+.withmd-prose blockquote {
   margin: 24px 0;
   padding: 0 0 0 20px;
   border-left: 2px solid var(--withmd-border);
@@ -317,18 +323,18 @@
   font-style: italic;
 }
 
-.withmd-markdown blockquote p {
+.withmd-prose blockquote p {
   margin: 12px 0;
 }
 
-.withmd-markdown hr {
+.withmd-prose hr {
   border: none;
   height: 1px;
   background: var(--withmd-border);
   margin: 48px 0;
 }
 
-.withmd-markdown code {
+.withmd-prose code {
   background: var(--withmd-glass-code);
   padding: 2px 6px;
   border-radius: 2px;
@@ -337,7 +343,7 @@
   color: var(--withmd-text);
 }
 
-.withmd-markdown pre {
+.withmd-prose pre {
   border: 0;
   border-radius: 0;
   background: var(--withmd-code-block-bg);
@@ -349,7 +355,7 @@
   white-space: pre;
 }
 
-.withmd-markdown pre code {
+.withmd-prose pre code {
   background: none;
   padding: 0;
   border-radius: 0;
@@ -358,13 +364,13 @@
   color: var(--withmd-body);
 }
 
-.withmd-markdown ul,
-.withmd-markdown ol {
+.withmd-prose ul,
+.withmd-prose ol {
   padding-left: 28px;
   margin: 16px 0;
 }
 
-.withmd-markdown table {
+.withmd-prose table {
   width: 100%;
   border-collapse: collapse;
   margin: 24px 0;
@@ -374,15 +380,15 @@
   max-width: 100%;
 }
 
-.withmd-markdown th,
-.withmd-markdown td {
+.withmd-prose th,
+.withmd-prose td {
   padding: 10px 14px;
   border-bottom: 1px solid var(--withmd-border);
   text-align: left;
   overflow-wrap: anywhere;
 }
 
-.withmd-markdown th {
+.withmd-prose th {
   color: var(--withmd-text);
   font-weight: 600;
   font-size: 13px;
@@ -390,11 +396,14 @@
   letter-spacing: 0.04em;
 }
 
-.withmd-markdown img {
+.withmd-prose img {
   max-width: 100%;
   height: auto;
   margin: 24px 0;
 }
+
+/* Aliases so existing class names keep working */
+.withmd-markdown { /* inherits via .withmd-prose */ }
 
 .withmd-scroll {
   overflow: auto;
@@ -410,6 +419,25 @@
   border-radius: 0;
 }
 
+.withmd-surface-stack {
+  display: grid;
+  grid-template: 1fr / 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+.withmd-surface-layer {
+  grid-area: 1 / 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.withmd-surface-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .withmd-doc-scroll {
   overflow-y: auto;
   overflow-x: hidden;
@@ -422,40 +450,32 @@
 
 .withmd-doc-scroll,
 .withmd-editor-scroll,
-.withmd-markdown pre,
-.withmd-markdown table,
-.withmd-prosemirror-wrap .ProseMirror pre,
-.withmd-prosemirror-wrap .ProseMirror table {
+.withmd-prose pre,
+.withmd-prose table {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 
 .withmd-doc-scroll::-webkit-scrollbar,
 .withmd-editor-scroll::-webkit-scrollbar,
-.withmd-markdown pre::-webkit-scrollbar,
-.withmd-markdown table::-webkit-scrollbar,
-.withmd-prosemirror-wrap .ProseMirror pre::-webkit-scrollbar,
-.withmd-prosemirror-wrap .ProseMirror table::-webkit-scrollbar {
+.withmd-prose pre::-webkit-scrollbar,
+.withmd-prose table::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
 
 .withmd-doc-scroll::-webkit-scrollbar-thumb,
 .withmd-editor-scroll::-webkit-scrollbar-thumb,
-.withmd-markdown pre::-webkit-scrollbar-thumb,
-.withmd-markdown table::-webkit-scrollbar-thumb,
-.withmd-prosemirror-wrap .ProseMirror pre::-webkit-scrollbar-thumb,
-.withmd-prosemirror-wrap .ProseMirror table::-webkit-scrollbar-thumb {
+.withmd-prose pre::-webkit-scrollbar-thumb,
+.withmd-prose table::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 0;
 }
 
 .withmd-doc-scroll::-webkit-scrollbar-track,
 .withmd-editor-scroll::-webkit-scrollbar-track,
-.withmd-markdown pre::-webkit-scrollbar-track,
-.withmd-markdown table::-webkit-scrollbar-track,
-.withmd-prosemirror-wrap .ProseMirror pre::-webkit-scrollbar-track,
-.withmd-prosemirror-wrap .ProseMirror table::-webkit-scrollbar-track {
+.withmd-prose pre::-webkit-scrollbar-track,
+.withmd-prose table::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -476,170 +496,18 @@
   background: transparent;
 }
 
+/* ProseMirror-specific overrides (typography inherited from .withmd-prose) */
+
 .withmd-prosemirror-wrap .ProseMirror {
   min-height: 260px;
   outline: none;
   white-space: pre-wrap;
-  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  color: var(--withmd-body);
-  font-size: 17px;
-  line-height: 1.58;
-  padding-bottom: 3rem;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.withmd-prosemirror-wrap .ProseMirror h1,
-.withmd-prosemirror-wrap .ProseMirror h2,
-.withmd-prosemirror-wrap .ProseMirror h3,
-.withmd-prosemirror-wrap .ProseMirror h4 {
-  font-family: 'Garamond', 'Apple Garamond', 'Iowan Old Style', 'Times New Roman', serif;
-  color: var(--withmd-text);
-  font-weight: 500;
-}
-
-.withmd-prosemirror-wrap .ProseMirror h1 {
-  font-size: 42px;
-  line-height: 1.12;
-  letter-spacing: -0.015em;
-  margin: 48px 0 28px;
-}
-
-.withmd-prosemirror-wrap .ProseMirror h1:first-child {
-  margin-top: 0;
-}
-
-.withmd-prosemirror-wrap .ProseMirror h2 {
-  font-size: 26px;
-  line-height: 1.25;
-  margin: 48px 0 24px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--withmd-border);
-}
-
-.withmd-prosemirror-wrap .ProseMirror h1 + h2 {
-  margin-top: 24px;
-}
-
-.withmd-prosemirror-wrap .ProseMirror h3 {
-  font-size: 21px;
-  line-height: 1.3;
-  margin: 36px 0 12px;
-}
-
-.withmd-prosemirror-wrap .ProseMirror h4 {
-  font-size: 17px;
-  line-height: 1.4;
-  margin: 28px 0 8px;
-  font-weight: 600;
-}
-
-.withmd-prosemirror-wrap .ProseMirror p {
-  margin: 18px 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.withmd-prosemirror-wrap .ProseMirror li {
-  margin: 8px 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.withmd-prosemirror-wrap .ProseMirror strong,
-.withmd-prosemirror-wrap .ProseMirror b {
-  color: var(--withmd-text);
-  font-weight: 600;
-}
-
-.withmd-prosemirror-wrap .ProseMirror a {
-  color: var(--withmd-text);
-  text-decoration: underline;
-  text-decoration-color: var(--withmd-border);
-  text-underline-offset: 3px;
-}
-
-.withmd-prosemirror-wrap .ProseMirror blockquote {
-  margin: 24px 0;
-  padding: 0 0 0 20px;
-  border-left: 2px solid var(--withmd-border);
-  color: var(--withmd-muted);
-  font-style: italic;
-}
-
-.withmd-prosemirror-wrap .ProseMirror hr {
-  border: none;
-  height: 1px;
-  background: var(--withmd-border);
-  margin: 48px 0;
-}
-
-.withmd-prosemirror-wrap .ProseMirror code {
-  background: var(--withmd-glass-code);
-  padding: 2px 6px;
-  border-radius: 2px;
-  font-size: 0.88em;
-  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--withmd-text);
-}
-
-.withmd-prosemirror-wrap .ProseMirror pre {
-  border: 0;
-  border-radius: 0;
-  background: var(--withmd-code-block-bg);
-  padding: 16px 20px;
-  margin: 24px 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  max-width: 100%;
-  white-space: pre;
-}
-
-.withmd-prosemirror-wrap .ProseMirror pre code {
-  background: none;
-  padding: 0;
-  border-radius: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--withmd-body);
-}
-
-.withmd-prosemirror-wrap .ProseMirror ul,
-.withmd-prosemirror-wrap .ProseMirror ol {
-  padding-left: 28px;
-  margin: 16px 0;
-}
-
-.withmd-prosemirror-wrap .ProseMirror table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 24px 0;
-  display: block;
-  overflow-x: auto;
-  overflow-y: hidden;
-  max-width: 100%;
-}
-
-.withmd-prosemirror-wrap .ProseMirror th,
-.withmd-prosemirror-wrap .ProseMirror td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--withmd-border);
-  text-align: left;
-  overflow-wrap: anywhere;
-}
-
-.withmd-prosemirror-wrap .ProseMirror th {
-  color: var(--withmd-text);
-  font-weight: 600;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .withmd-table-block {
   margin: 24px 0;
-  border: 1px dashed var(--withmd-border);
-  padding: 2px;
+  border: none;
+  padding: 0;
   cursor: default;
 }
 
@@ -676,13 +544,10 @@
 
 .withmd-table-block.ProseMirror-selectednode {
   outline: 1px solid var(--withmd-primary-border);
-  border-color: var(--withmd-primary-border);
 }
 
 .withmd-table-block.is-editing {
-  border-style: solid;
-  border-color: var(--withmd-primary-border);
-  padding: 0;
+  outline: 1px solid var(--withmd-primary-border);
 }
 
 .withmd-table-block-editor {

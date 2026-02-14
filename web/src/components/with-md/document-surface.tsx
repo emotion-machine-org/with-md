@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import CollabEditor from '@/components/with-md/collab-editor';
 import ReadRenderer from '@/components/with-md/read-renderer';
@@ -62,8 +62,10 @@ export default function DocumentSurface({
   onDeactivateEditing,
 }: Props) {
   const editContainerRef = useRef<HTMLDivElement>(null);
+  const readLayerRef = useRef<HTMLDivElement>(null);
   const sourceContainerRef = useRef<HTMLDivElement>(null);
   const [cursorHint, setCursorHint] = useState<CursorHint | null>(null);
+  const [cursorHintKey, setCursorHintKey] = useState(0);
 
   useIdleTimeout({
     containerRef: editContainerRef,
@@ -78,6 +80,32 @@ export default function DocumentSurface({
     enabled: editing && userMode === 'source' && !sourceDirty,
     onIdle: onDeactivateEditing,
   });
+
+  // Sync scroll position between read and edit layers before paint
+  useLayoutEffect(() => {
+    if (userMode !== 'document') return;
+    const readEl = readLayerRef.current;
+    const editEl = editContainerRef.current?.querySelector('.withmd-editor-scroll');
+    if (!readEl || !editEl) return;
+
+    if (editing) {
+      // Read → Edit: transfer read scroll position to editor
+      const maxRead = readEl.scrollHeight - readEl.clientHeight;
+      if (maxRead > 0) {
+        const ratio = readEl.scrollTop / maxRead;
+        const maxEdit = editEl.scrollHeight - editEl.clientHeight;
+        editEl.scrollTop = ratio * maxEdit;
+      }
+    } else {
+      // Edit → Read: transfer editor scroll position to read
+      const maxEdit = editEl.scrollHeight - editEl.clientHeight;
+      if (maxEdit > 0) {
+        const ratio = editEl.scrollTop / maxEdit;
+        const maxRead = readEl.scrollHeight - readEl.clientHeight;
+        readEl.scrollTop = ratio * maxRead;
+      }
+    }
+  }, [editing, userMode]);
 
   const handleReadClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -135,6 +163,7 @@ export default function DocumentSurface({
       }
 
       setCursorHint({ sourceLine, textFragment, offsetInFragment });
+      setCursorHintKey((k) => k + 1);
       onActivateEditing();
     },
     [onActivateEditing],
@@ -144,6 +173,7 @@ export default function DocumentSurface({
     onActivateEditing();
   }, [onActivateEditing]);
 
+  // --- Source mode: component swap (textarea is cheap to mount) ---
   if (userMode === 'source') {
     if (!editing) {
       return (
@@ -169,9 +199,13 @@ export default function DocumentSurface({
     );
   }
 
-  if (editing) {
-    return (
-      <div ref={editContainerRef} className="withmd-column withmd-fill">
+  // --- Document mode: both layers always mounted, toggle visibility ---
+  return (
+    <div className="withmd-surface-stack">
+      <div
+        ref={editContainerRef}
+        className={`withmd-surface-layer withmd-column ${editing ? '' : 'withmd-surface-hidden'}`}
+      >
         <CollabEditor
           mdFileId={mdFileId}
           content={readContent}
@@ -182,22 +216,25 @@ export default function DocumentSurface({
           onSelectionDraftChange={onSelectionDraftChange}
           markRequest={markRequest}
           onMarkRequestApplied={onMarkRequestApplied}
-          initialCursorHint={cursorHint ?? undefined}
+          cursorHint={cursorHint ?? undefined}
+          cursorHintKey={cursorHintKey}
         />
       </div>
-    );
-  }
 
-  return (
-    <div className="withmd-fill withmd-doc-scroll" onClick={handleReadClick}>
-      <ReadRenderer
-        content={readContent}
-        comments={comments}
-        focusedCommentId={focusedCommentId}
-        focusedAnchorMatch={focusedAnchorMatch}
-        focusRequestId={focusRequestId}
-        onSelectionDraftChange={onSelectionDraftChange}
-      />
+      <div
+        ref={readLayerRef}
+        className={`withmd-surface-layer withmd-doc-scroll ${editing ? 'withmd-surface-hidden' : ''}`}
+        onClick={handleReadClick}
+      >
+        <ReadRenderer
+          content={readContent}
+          comments={comments}
+          focusedCommentId={focusedCommentId}
+          focusedAnchorMatch={focusedAnchorMatch}
+          focusRequestId={focusRequestId}
+          onSelectionDraftChange={onSelectionDraftChange}
+        />
+      </div>
     </div>
   );
 }

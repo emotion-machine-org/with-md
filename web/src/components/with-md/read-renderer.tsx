@@ -336,7 +336,7 @@ export default function ReadRenderer({
   }, [content, focusRequestId, focusedAnchorMatch, focusedComment]);
 
   return (
-    <article ref={rootRef} className="withmd-markdown">
+    <article ref={rootRef} className="withmd-prose withmd-markdown">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>
     </article>
   );

@@ -22,7 +22,8 @@ interface Props {
   onSelectionDraftChange(next: CommentSelectionDraft | null): void;
   markRequest: { requestId: number; commentMarkId: string; from: number; to: number } | null;
   onMarkRequestApplied(requestId: number): void;
-  initialCursorHint?: CursorHint;
+  cursorHint?: CursorHint;
+  cursorHintKey?: number;
 }
 
 function getEditorMarkdown(editor: unknown): string | null {
@@ -240,7 +241,8 @@ export default function CollabEditor({
   onSelectionDraftChange,
   markRequest,
   onMarkRequestApplied,
-  initialCursorHint,
+  cursorHint,
+  cursorHintKey,
 }: Props) {
   const realtimeRequested = process.env.NEXT_PUBLIC_WITHMD_ENABLE_REALTIME === '1';
   const realtimeExperimental = process.env.NEXT_PUBLIC_WITHMD_ENABLE_REALTIME_EXPERIMENTAL === '1';
@@ -255,6 +257,9 @@ export default function CollabEditor({
 
   const editor = useEditor({
     immediatelyRender: false,
+    editorProps: {
+      attributes: { class: 'withmd-prose' },
+    },
     extensions: buildEditorExtensions({
       ydoc,
       provider,
@@ -419,12 +424,13 @@ export default function CollabEditor({
     focusEditorRange(editor, target.from, target.to);
   }, [editor, focusRequestId, focusedComment]);
 
-  const cursorHintAppliedRef = useRef(false);
+  const lastAppliedKeyRef = useRef<number>(-1);
   useEffect(() => {
-    if (!editor || cursorHintAppliedRef.current || !initialCursorHint) return;
-    cursorHintAppliedRef.current = true;
+    if (!editor || !cursorHint || typeof cursorHintKey !== 'number') return;
+    if (cursorHintKey === lastAppliedKeyRef.current) return;
+    lastAppliedKeyRef.current = cursorHintKey;
 
-    const { textFragment, sourceLine, offsetInFragment } = initialCursorHint;
+    const { textFragment, sourceLine, offsetInFragment } = cursorHint;
     const commands = editor.commands as unknown as {
       focus: () => boolean;
       setTextSelection: (pos: number) => boolean;
@@ -437,7 +443,6 @@ export default function CollabEditor({
         try {
           let targetPos: number;
           if (typeof offsetInFragment === 'number' && offsetInFragment > 0) {
-            // Walk text nodes inside the match to find the exact DOM position
             const domPoint = domPointAtOffset(range, offsetInFragment);
             targetPos = domPoint
               ? editor.view.posAtDOM(domPoint.node, domPoint.offset)
@@ -447,7 +452,6 @@ export default function CollabEditor({
           }
           commands.focus();
           commands.setTextSelection(targetPos);
-          editor.view.dispatch(editor.state.tr.scrollIntoView());
           return;
         } catch {
           // fall through to sourceLine
@@ -474,13 +478,12 @@ export default function CollabEditor({
       });
       commands.focus();
       commands.setTextSelection(Math.min(targetPos, editor.state.doc.content.size));
-      editor.view.dispatch(editor.state.tr.scrollIntoView());
       return;
     }
 
     // No hint: just focus the editor
     commands.focus();
-  }, [editor, initialCursorHint]);
+  }, [editor, cursorHint, cursorHintKey]);
 
   if (!editor) {
     return <p className="withmd-muted-sm">Loading editor...</p>;
@@ -489,13 +492,6 @@ export default function CollabEditor({
   if (realtimeRequested && !realtimeExperimental) {
     return (
       <div className="withmd-column withmd-fill withmd-gap-2">
-        <div className="withmd-muted-xs">
-          Realtime collaboration is currently in safe fallback mode. Set
-          {' '}
-          <code>NEXT_PUBLIC_WITHMD_ENABLE_REALTIME_EXPERIMENTAL=1</code>
-          {' '}
-          to enable the experimental realtime path.
-        </div>
         <div className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill">
           <EditorContent editor={editor} />
         </div>
