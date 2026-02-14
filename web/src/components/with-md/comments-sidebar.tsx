@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { AnchorMatch, CommentRecord, CommentSelectionDraft } from '@/lib/with-md/types';
 
@@ -29,6 +29,11 @@ function truncateQuote(quote: string, max = 80): string {
   return quote.slice(0, max).trimEnd() + '...';
 }
 
+function autoGrow(el: HTMLTextAreaElement) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
 export default function CommentsSidebar({
   comments,
   pendingSelection,
@@ -41,10 +46,11 @@ export default function CommentsSidebar({
 }: Props) {
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const ordered = useMemo(() => [...comments].sort((a, b) => b.createdAt - a.createdAt), [comments]);
 
-  async function submit() {
+  const submit = useCallback(async () => {
     if (!body.trim() || !pendingSelection) return;
     setSaving(true);
     try {
@@ -53,10 +59,13 @@ export default function CommentsSidebar({
         selection: pendingSelection,
       });
       setBody('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
     } finally {
       setSaving(false);
     }
-  }
+  }, [body, pendingSelection, onCreate]);
 
   return (
     <aside className="withmd-drawer-section withmd-column withmd-fill withmd-pad-3">
@@ -64,11 +73,21 @@ export default function CommentsSidebar({
 
       <div className="withmd-comment-form withmd-mt-2">
         <textarea
+          ref={textareaRef}
           className="withmd-comment-input"
           placeholder="Add a comment..."
           rows={1}
           value={body}
-          onChange={(event) => setBody(event.target.value)}
+          onChange={(event) => {
+            setBody(event.target.value);
+            autoGrow(event.target);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
         />
         {pendingSelection && (
           <div className="withmd-selection-pill withmd-mt-2">

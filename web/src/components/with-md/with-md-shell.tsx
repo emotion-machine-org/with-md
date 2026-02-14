@@ -110,6 +110,23 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     }
   }, [mode]);
 
+  useEffect(() => {
+    if (!pendingSelection) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('.withmd-rail-thread')) return;
+      if (target.closest('.withmd-comment-form')) return;
+      setPendingSelection(null);
+    };
+
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true);
+    };
+  }, [pendingSelection]);
+
   const anchorMap = useCommentAnchors(currentFile?.content ?? '', comments);
 
   const reloadActivity = useCallback(async () => {
@@ -198,25 +215,28 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   }, [currentFile, mode, reloadActivity, savedContent]);
 
   const onCreateComment = useCallback(
-    async (input: { body: string; selection: CommentSelectionDraft | null }) => {
+    async (input: { body: string; selection: CommentSelectionDraft | null; parentComment?: CommentRecord | null }) => {
       if (!currentFile) return;
       const selection = input.selection;
+      const parentComment = input.parentComment ?? null;
+      const parentAnchor = parentComment?.anchor;
       const commentMarkId = selection?.source === 'edit'
         ? `cmark_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-        : undefined;
+        : parentAnchor?.commentMarkId;
 
-      await api.createComment({
+      const created = await api.createComment({
         mdFileId: currentFile.mdFileId,
         authorId: user?.githubLogin ?? 'local-user',
         body: input.body,
+        parentCommentId: parentComment?.id,
         commentMarkId,
-        textQuote: selection?.textQuote ?? '',
-        fallbackLine: selection?.fallbackLine ?? 1,
-        anchorPrefix: selection?.anchorPrefix,
-        anchorSuffix: selection?.anchorSuffix,
-        anchorHeadingPath: selection?.anchorHeadingPath,
-        rangeStart: selection?.rangeStart,
-        rangeEnd: selection?.rangeEnd,
+        textQuote: selection?.textQuote ?? parentAnchor?.textQuote ?? '',
+        fallbackLine: selection?.fallbackLine ?? parentAnchor?.fallbackLine ?? 1,
+        anchorPrefix: selection?.anchorPrefix ?? parentAnchor?.anchorPrefix,
+        anchorSuffix: selection?.anchorSuffix ?? parentAnchor?.anchorSuffix,
+        anchorHeadingPath: selection?.anchorHeadingPath ?? parentAnchor?.anchorHeadingPath,
+        rangeStart: selection?.rangeStart ?? parentAnchor?.rangeStart,
+        rangeEnd: selection?.rangeEnd ?? parentAnchor?.rangeEnd,
       });
 
       if (
@@ -233,11 +253,15 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         });
       }
 
-      setPendingSelection(null);
+      if (selection) {
+        setPendingSelection(null);
+      }
+      setActiveCommentId(created.id);
+      setFocusRequestId((prev) => prev + 1);
       await reloadCurrentFileData();
       await reloadActivity();
     },
-    [currentFile, reloadActivity, reloadCurrentFileData],
+    [currentFile, reloadActivity, reloadCurrentFileData, user?.githubLogin],
   );
 
   const onSelectComment = useCallback(
@@ -409,6 +433,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   mode={mode}
                   readContent={currentFile.content}
                   comments={comments}
+                  anchorByCommentId={anchorMap}
                   focusedCommentId={activeComment?.id ?? null}
                   focusedComment={activeComment}
                   focusedAnchorMatch={activeAnchorMatch}
@@ -425,8 +450,31 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                     setCurrentFile((prev) => (prev ? { ...prev, content: next } : prev));
                     setSourceValue(next);
                   }}
-                  onSelectionDraftChange={(next) => {
-                    if (next) setPendingSelection(next);
+                  onSelectionDraftChange={setPendingSelection}
+                  pendingSelection={pendingSelection}
+                  onSelectComment={onSelectComment}
+                  onReplyComment={async (parentComment, body) => {
+                    await onCreateComment({
+                      body,
+                      selection: null,
+                      parentComment,
+                    });
+                  }}
+                  onCreateDraftComment={async (body, selection) => {
+                    await onCreateComment({
+                      body,
+                      selection,
+                    });
+                  }}
+                  onResolveThread={async (commentIds) => {
+                    for (const id of commentIds) {
+                      await api.deleteComment(id);
+                    }
+                    if (activeCommentId && commentIds.includes(activeCommentId)) {
+                      setActiveCommentId(null);
+                    }
+                    await reloadCurrentFileData();
+                    await reloadActivity();
                   }}
                   markRequest={markRequest}
                   onMarkRequestApplied={(requestId) => {
@@ -435,22 +483,6 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                 />
               </div>
             </div>
-            {pendingSelection && (
-              <button
-                type="button"
-                className="withmd-selection-trigger"
-                style={{
-                  left: `${pendingSelection.rect.left + pendingSelection.rect.width / 2 + 10}px`,
-                  top: `${pendingSelection.rect.top - 36}px`,
-                }}
-                onClick={() => {
-                  setCommentsOpen(true);
-                  setFilesOpen(false);
-                }}
-              >
-                Comment
-              </button>
-            )}
           </section>
         </section>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
@@ -18,10 +18,17 @@ import type { AnchorMatch, CommentRecord, CommentSelectionDraft } from '@/lib/wi
 interface Props {
   content: string;
   comments: CommentRecord[];
+  anchorByCommentId: Map<string, AnchorMatch | null>;
+  activeCommentId: string | null;
   focusedCommentId: string | null;
   focusedAnchorMatch: AnchorMatch | null;
   focusRequestId: number;
   onSelectionDraftChange(next: CommentSelectionDraft | null): void;
+  pendingSelection: CommentSelectionDraft | null;
+  onSelectComment(comment: CommentRecord): void;
+  onReplyComment(parentComment: CommentRecord, body: string): Promise<void>;
+  onCreateDraftComment(body: string, selection: CommentSelectionDraft): Promise<void>;
+  onResolveThread(commentIds: string[]): Promise<void>;
 }
 
 function findDomRangeByQuote(root: HTMLElement, quote: string, occurrence = 0): Range | null {
@@ -76,6 +83,17 @@ function findDomRangeByQuote(root: HTMLElement, quote: string, occurrence = 0): 
   range.setStart(nodes[startNodeIndex], startOffset);
   range.setEnd(nodes[endNodeIndex], endOffset);
   return range;
+}
+
+function setCssHighlightByName(name: string, range: Range | null) {
+  const cssAny = (window as unknown as { CSS?: { highlights?: Map<string, unknown> } }).CSS;
+  const highlightCtor = (window as unknown as { Highlight?: new (...args: Range[]) => unknown }).Highlight;
+  if (!cssAny?.highlights) return;
+
+  cssAny.highlights.delete(name);
+  if (!range || !highlightCtor) return;
+
+  cssAny.highlights.set(name, new highlightCtor(range));
 }
 
 function setCssHighlight(range: Range | null) {
@@ -156,15 +174,50 @@ function extractHeadingPathFromDom(root: HTMLElement, startNode: Node): string[]
   return [];
 }
 
+function anchorLabel(comment: CommentRecord): string {
+  const path = comment.anchor.anchorHeadingPath;
+  if (path.length > 0) {
+    const last = path[path.length - 1];
+    return path.length > 1 ? `${path[0]} / ... / ${last}` : last;
+  }
+  return `Line ${comment.anchor.fallbackLine}`;
+}
+
+function rootCommentId(byId: Map<string, CommentRecord>, comment: CommentRecord): string {
+  let current = comment;
+  while (current.parentCommentId) {
+    const parent = byId.get(current.parentCommentId);
+    if (!parent) break;
+    current = parent;
+  }
+  return current.id;
+}
+
+function estimatedThreadHeight(messageCount: number): number {
+  return 90 + Math.min(6, messageCount) * 34 + 56;
+}
+
 export default function ReadRenderer({
   content,
   comments,
+  anchorByCommentId,
+  activeCommentId,
   focusedCommentId,
   focusedAnchorMatch,
   focusRequestId,
   onSelectionDraftChange,
+  pendingSelection,
+  onSelectComment,
+  onReplyComment,
+  onCreateDraftComment,
+  onResolveThread,
 }: Props) {
-  const rootRef = useRef<HTMLElement | null>(null);
+  const markdownRef = useRef<HTMLElement | null>(null);
+  const pendingRangeRef = useRef<Range | null>(null);
+  const [replyDraftByThread, setReplyDraftByThread] = useState<Record<string, string>>({});
+  const [replyingThreadId, setReplyingThreadId] = useState<string | null>(null);
+  const [lineAnchors, setLineAnchors] = useState<Array<{ line: number; top: number }>>([]);
+
   const markdownComponents = useMemo(() => {
     type SourceTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'p' | 'li' | 'pre' | 'blockquote' | 'table' | 'tr' | 'hr';
     const withSourceLine = (tag: SourceTag) =>
@@ -196,29 +249,125 @@ export default function ReadRenderer({
       hr: withSourceLine('hr'),
     };
   }, []) as Components;
+
   const focusedComment = useMemo(
     () => comments.find((comment) => comment.id === focusedCommentId) ?? null,
     [comments, focusedCommentId],
   );
 
   useEffect(() => {
-    const root = rootRef.current;
+    const root = markdownRef.current;
+    if (!root) return;
+
+    const measure = () => {
+      const elements = Array.from(root.querySelectorAll<HTMLElement>('[data-source-line]'));
+      const lineToTop = new Map<number, number>();
+      for (const element of elements) {
+        const raw = element.dataset.sourceLine;
+        if (!raw) continue;
+        const line = Number(raw);
+        if (!Number.isFinite(line)) continue;
+        const top = element.offsetTop;
+        const prev = lineToTop.get(line);
+        if (prev == null || top < prev) {
+          lineToTop.set(line, top);
+        }
+      }
+      const sorted = Array.from(lineToTop.entries())
+        .map(([line, top]) => ({ line, top }))
+        .sort((a, b) => a.line - b.line);
+      setLineAnchors(sorted);
+    };
+
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(root);
+    window.addEventListener('resize', measure);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [content, comments.length]);
+
+  const findTopByLine = useMemo(() => {
+    return (targetLine: number): number => {
+      if (!lineAnchors.length) return 0;
+      let nearest = lineAnchors[0];
+      for (const anchor of lineAnchors) {
+        if (Math.abs(anchor.line - targetLine) < Math.abs(nearest.line - targetLine)) {
+          nearest = anchor;
+        }
+      }
+      return nearest.top;
+    };
+  }, [lineAnchors]);
+
+  const positionedThreads = useMemo(() => {
+    const byId = new Map(comments.map((comment) => [comment.id, comment]));
+    const grouped = new Map<string, CommentRecord[]>();
+
+    for (const comment of comments) {
+      const threadId = rootCommentId(byId, comment);
+      const existing = grouped.get(threadId);
+      if (existing) {
+        existing.push(comment);
+      } else {
+        grouped.set(threadId, [comment]);
+      }
+    }
+
+    const ordered = Array.from(grouped.entries())
+      .map(([threadId, messages]) => {
+        const root = byId.get(threadId) ?? messages[0];
+        const anchor = anchorByCommentId.get(root.id) ?? anchorByCommentId.get(messages[0].id) ?? null;
+        const line = anchor ? lineNumberAtIndex(content, anchor.start) : root.anchor.fallbackLine;
+        const top = findTopByLine(line);
+        const sortedMessages = [...messages].sort((a, b) => a.createdAt - b.createdAt);
+        return {
+          threadId,
+          root,
+          messages: sortedMessages,
+          top,
+          hasActive: sortedMessages.some((message) => message.id === activeCommentId),
+        };
+      })
+      .sort((a, b) => a.top - b.top);
+
+    let cursor = -Infinity;
+    return ordered.map((thread) => {
+      const adjustedTop = Math.max(thread.top, cursor + 12);
+      cursor = adjustedTop + estimatedThreadHeight(thread.messages.length);
+      return { ...thread, top: adjustedTop };
+    });
+  }, [activeCommentId, anchorByCommentId, comments, content, findTopByLine]);
+  const draftTop = useMemo(() => {
+    if (!pendingSelection) return null;
+    const line = pendingSelection.fallbackLine;
+    return findTopByLine(line);
+  }, [findTopByLine, pendingSelection]);
+  const hasPositionedThreads = positionedThreads.length > 0 || Boolean(pendingSelection);
+
+  useEffect(() => {
+    const root = markdownRef.current;
     if (!root) return;
 
     const updateSelectionDraft = () => {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        onSelectionDraftChange(null);
         return;
       }
 
       const range = selection.getRangeAt(0);
       const container = range.commonAncestorContainer;
       if (!root.contains(container)) {
+        onSelectionDraftChange(null);
         return;
       }
 
       const textQuote = selection.toString().trim();
       if (!textQuote) {
+        onSelectionDraftChange(null);
         return;
       }
 
@@ -263,6 +412,10 @@ export default function ReadRenderer({
           ? extractHeadingPathAtIndex(content, rangeStart)
           : [];
 
+      const clonedRange = range.cloneRange();
+      pendingRangeRef.current = clonedRange;
+      setCssHighlightByName('withmd-pending-selection', clonedRange);
+
       const rect = range.getBoundingClientRect();
       onSelectionDraftChange({
         source: 'read',
@@ -293,7 +446,7 @@ export default function ReadRenderer({
   }, [content, onSelectionDraftChange]);
 
   useEffect(() => {
-    const root = rootRef.current;
+    const root = markdownRef.current;
     if (!root || !focusedComment) {
       setCssHighlight(null);
       return;
@@ -335,9 +488,110 @@ export default function ReadRenderer({
     }
   }, [content, focusRequestId, focusedAnchorMatch, focusedComment]);
 
+  useEffect(() => {
+    if (!pendingSelection) {
+      setCssHighlightByName('withmd-pending-selection', null);
+      pendingRangeRef.current = null;
+    }
+  }, [pendingSelection]);
+
   return (
-    <article ref={rootRef} className="withmd-markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>
-    </article>
+    <div className="withmd-read-layout">
+      <article ref={markdownRef} className="withmd-markdown">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>
+      </article>
+      {hasPositionedThreads && (
+        <aside className="withmd-comment-rail withmd-comment-rail-floating" aria-label="Anchored comment threads">
+          {pendingSelection && (
+            <section className="withmd-rail-thread is-draft" style={{ top: draftTop ?? 0 }}>
+              <div className="withmd-rail-reply">
+                <textarea
+                  className="withmd-rail-reply-input"
+                  placeholder="Add a comment..."
+                  rows={1}
+                  onChange={(event) => {
+                    event.target.style.height = 'auto';
+                    event.target.style.height = event.target.scrollHeight + 'px';
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' || event.shiftKey) return;
+                    event.preventDefault();
+                    const body = (event.target as HTMLTextAreaElement).value.trim();
+                    if (!body) return;
+                    const textarea = event.target as HTMLTextAreaElement;
+                    void onCreateDraftComment(body, pendingSelection).then(() => {
+                      textarea.value = '';
+                      textarea.style.height = 'auto';
+                    });
+                  }}
+                />
+              </div>
+            </section>
+          )}
+          {!pendingSelection && positionedThreads.map((thread) => (
+            <section
+              key={thread.threadId}
+              className={`withmd-rail-thread ${thread.hasActive ? 'is-active' : ''}`}
+              style={{ top: thread.top }}
+            >
+              <button
+                type="button"
+                className="withmd-rail-resolve"
+                aria-label="Resolve thread"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void onResolveThread(thread.messages.map((m) => m.id));
+                }}
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" /></svg>
+              </button>
+              <div className="withmd-rail-messages">
+                {thread.messages.map((message) => (
+                  <button
+                    key={message.id}
+                    type="button"
+                    className={`withmd-rail-message ${message.id === activeCommentId ? 'is-active' : ''}`}
+                    onClick={() => onSelectComment(message)}
+                  >
+                    <span className="withmd-rail-author">{message.authorId}</span>
+                    <span className="withmd-rail-body">{message.body}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="withmd-rail-reply">
+                <textarea
+                  className="withmd-rail-reply-input"
+                  placeholder="Reply..."
+                  rows={1}
+                  value={replyDraftByThread[thread.threadId] ?? ''}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setReplyDraftByThread((prev) => ({ ...prev, [thread.threadId]: next }));
+                    event.target.style.height = 'auto';
+                    event.target.style.height = event.target.scrollHeight + 'px';
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' || event.shiftKey) return;
+                    event.preventDefault();
+                    const body = (replyDraftByThread[thread.threadId] ?? '').trim();
+                    if (!body) return;
+                    setReplyingThreadId(thread.threadId);
+                    const target = event.target as HTMLTextAreaElement;
+                    void onReplyComment(thread.root, body)
+                      .then(() => {
+                        setReplyDraftByThread((prev) => ({ ...prev, [thread.threadId]: '' }));
+                        target.style.height = 'auto';
+                      })
+                      .finally(() => {
+                        setReplyingThreadId((prev) => (prev === thread.threadId ? null : prev));
+                      });
+                  }}
+                />
+              </div>
+            </section>
+          ))}
+        </aside>
+      )}
+    </div>
   );
 }

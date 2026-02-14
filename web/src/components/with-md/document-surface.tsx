@@ -10,6 +10,7 @@ interface Props {
   mode: DocMode;
   readContent: string;
   comments: CommentRecord[];
+  anchorByCommentId: Map<string, AnchorMatch | null>;
   focusedCommentId: string | null;
   focusedComment: CommentRecord | null;
   focusedAnchorMatch: AnchorMatch | null;
@@ -24,6 +25,11 @@ interface Props {
   onDiscardSource(): void;
   onEditorContentChange(next: string): void;
   onSelectionDraftChange(next: CommentSelectionDraft | null): void;
+  pendingSelection: CommentSelectionDraft | null;
+  onSelectComment(comment: CommentRecord): void;
+  onReplyComment(parentComment: CommentRecord, body: string): Promise<void>;
+  onCreateDraftComment(body: string, selection: CommentSelectionDraft): Promise<void>;
+  onResolveThread(commentIds: string[]): Promise<void>;
   markRequest: { requestId: number; commentMarkId: string; from: number; to: number } | null;
   onMarkRequestApplied(requestId: number): void;
 }
@@ -33,6 +39,7 @@ export default function DocumentSurface({
   mode,
   readContent,
   comments,
+  anchorByCommentId,
   focusedCommentId,
   focusedComment,
   focusedAnchorMatch,
@@ -47,6 +54,11 @@ export default function DocumentSurface({
   onDiscardSource,
   onEditorContentChange,
   onSelectionDraftChange,
+  pendingSelection,
+  onSelectComment,
+  onReplyComment,
+  onCreateDraftComment,
+  onResolveThread,
   markRequest,
   onMarkRequestApplied,
 }: Props) {
@@ -86,10 +98,17 @@ export default function DocumentSurface({
       <ReadRenderer
         content={readContent}
         comments={comments}
+        anchorByCommentId={anchorByCommentId}
+        activeCommentId={focusedCommentId}
         focusedCommentId={focusedCommentId}
         focusedAnchorMatch={focusedAnchorMatch}
         focusRequestId={focusRequestId}
         onSelectionDraftChange={onSelectionDraftChange}
+        pendingSelection={pendingSelection}
+        onSelectComment={onSelectComment}
+        onReplyComment={onReplyComment}
+        onCreateDraftComment={onCreateDraftComment}
+        onResolveThread={onResolveThread}
       />
     </div>
   );

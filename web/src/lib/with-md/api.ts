@@ -17,6 +17,7 @@ interface CreateCommentInput {
   mdFileId: string;
   authorId: string;
   body: string;
+  parentCommentId?: string;
   commentMarkId?: string;
   textQuote: string;
   fallbackLine: number;
@@ -268,6 +269,7 @@ const convexApi: WithMdApi = {
       mdFileId: input.mdFileId as never,
       authorId: input.authorId,
       body: input.body,
+      parentCommentId: input.parentCommentId as never,
       commentMarkId: input.commentMarkId ?? nowId('cmark'),
       textQuote: input.textQuote,
       anchorPrefix: input.anchorPrefix ?? file.content.slice(Math.max(0, anchorAt - 32), Math.max(0, anchorAt)),
