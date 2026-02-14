@@ -28,7 +28,7 @@ const SYNTAX_REASON_LABELS: Record<string, string> = {
   gfm_table: 'gfm_table',
 };
 
-const BG_COUNT = 8;
+const BG_COUNT = 12;
 
 function modeClass(active: boolean): string {
   return active ? 'withmd-dock-btn withmd-dock-btn-active' : 'withmd-dock-btn';
@@ -102,7 +102,7 @@ export default function DocumentToolbar({
         </button>
         <button type="button" className="withmd-dock-btn" onClick={cycleBackground} aria-label="Change background">
           <ImageIcon />
-          <span className="withmd-dock-tooltip">Background</span>
+          <span className="withmd-dock-tooltip">Change Background</span>
         </button>
         <button type="button" className="withmd-dock-btn" onClick={toggleTheme} aria-label="Toggle theme">
           <SunIcon />

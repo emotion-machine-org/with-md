@@ -101,6 +101,10 @@
 [data-bg="5"] { --withmd-bg-image: url('/backgrounds/background_5.webp'); }
 [data-bg="6"] { --withmd-bg-image: url('/backgrounds/background_6.webp'); }
 [data-bg="7"] { --withmd-bg-image: url('/backgrounds/background_7.webp'); }
+[data-bg="8"] { --withmd-bg-image: url('/backgrounds/background_8.webp'); }
+[data-bg="9"] { --withmd-bg-image: url('/backgrounds/background_9.webp'); }
+[data-bg="10"] { --withmd-bg-image: url('/backgrounds/background_10.webp'); }
+[data-bg="11"] { --withmd-bg-image: url('/backgrounds/background_11.webp'); }
 
 .withmd-page {
   min-height: 100vh;
