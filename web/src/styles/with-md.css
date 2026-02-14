@@ -791,7 +791,7 @@
   scrollbar-width: none;
   margin-right: 0;
   padding-right: 0;
-  overflow: hidden;
+  overflow-y: auto;
   margin-top: 24px;
 }
 .withmd-landing .withmd-doc-scroll::-webkit-scrollbar {
@@ -1294,7 +1294,7 @@
   bottom: 0;
   width: 48px;
   border: 0;
-  background: transparent;
+  background: var(--withmd-glass-bg);
   color: rgba(245, 245, 244, 0.85);
   writing-mode: vertical-rl;
   text-orientation: mixed;
@@ -1308,13 +1308,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity 200ms ease, background 200ms ease, color 160ms ease;
-}
-
-.withmd-side:hover .withmd-side-toggle:not(.is-open) {
   opacity: 1;
-  background: var(--withmd-glass-bg);
+  transition: background 200ms ease, color 160ms ease;
 }
 
 .withmd-side-toggle:not(.is-open):hover {
