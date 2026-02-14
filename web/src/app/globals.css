@@ -77,7 +77,13 @@ body {
 
 body {
   font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  background: #0a0a09;
+  background-color: #0a0a09;
+  background-image:
+    linear-gradient(var(--withmd-bg-overlay, transparent), var(--withmd-bg-overlay, transparent)),
+    var(--withmd-bg-image, url('/backgrounds/background_0.webp'));
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: #f5f5f4;
 }
 
@@ -87,6 +93,6 @@ a {
 }
 
 [data-theme="light"] body {
-  background: #f5f4f2;
+  background-color: #f5f4f2;
   color: #1c1917;
 }

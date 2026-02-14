@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/with-md/backgrounds/:path*',
+        source: '/backgrounds/:path*',
         headers: [
           {
             key: 'Cache-Control',

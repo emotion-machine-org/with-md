@@ -55,8 +55,7 @@ function cycleBackground() {
     /* noop */
   }
   const next = (current + 1) % BG_COUNT;
-  const url = `/with-md/backgrounds/background_${next}.webp`;
-  document.documentElement.style.setProperty('--withmd-bg-url', `url('${url}')`);
+  document.documentElement.setAttribute('data-bg', String(next));
   try {
     localStorage.setItem('withmd-bg', String(next));
   } catch (e) {
