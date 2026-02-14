@@ -10,7 +10,7 @@ import { buildEditorExtensions } from '@/components/with-md/tiptap/editor-extens
 import { useCollabDoc } from '@/hooks/with-md/use-collab-doc';
 import { extractHeadingPathAtIndex, findAllIndices, lineNumberAtIndex } from '@/lib/with-md/anchor';
 import { normalizeAsciiDiagramBlocks } from '@/lib/with-md/ascii-diagram';
-import type { CommentRecord, CommentSelectionDraft } from '@/lib/with-md/types';
+import type { CommentRecord, CommentSelectionDraft, CursorHint } from '@/lib/with-md/types';
 
 interface Props {
   mdFileId: string;
@@ -22,6 +22,8 @@ interface Props {
   onSelectionDraftChange(next: CommentSelectionDraft | null): void;
   markRequest: { requestId: number; commentMarkId: string; from: number; to: number } | null;
   onMarkRequestApplied(requestId: number): void;
+  cursorHint?: CursorHint;
+  cursorHintKey?: number;
 }
 
 function getEditorMarkdown(editor: unknown): string | null {
@@ -107,6 +109,32 @@ function findMarkedRangeInDoc(doc: ProseMirrorNode, commentMarkId: string): { fr
     return null;
   }
   return { from: firstFrom, to: lastTo };
+}
+
+function domPointAtOffset(range: Range, charOffset: number): { node: Node; offset: number } | null {
+  const walker = document.createTreeWalker(
+    range.commonAncestorContainer,
+    NodeFilter.SHOW_TEXT,
+  );
+  let remaining = charOffset;
+  let node = walker.currentNode.nodeType === Node.TEXT_NODE ? walker.currentNode : walker.nextNode();
+  // Advance to the range start
+  while (node && !range.intersectsNode(node)) {
+    node = walker.nextNode();
+  }
+  while (node && range.intersectsNode(node)) {
+    const text = node as Text;
+    // How many chars of this node are inside the range?
+    const nodeStart = node === range.startContainer ? range.startOffset : 0;
+    const nodeEnd = node === range.endContainer ? range.endOffset : (text.nodeValue?.length ?? 0);
+    const available = nodeEnd - nodeStart;
+    if (remaining <= available) {
+      return { node, offset: nodeStart + remaining };
+    }
+    remaining -= available;
+    node = walker.nextNode();
+  }
+  return null;
 }
 
 function findDomRangeByQuote(root: HTMLElement, quote: string, occurrence = 0): Range | null {
@@ -213,6 +241,8 @@ export default function CollabEditor({
   onSelectionDraftChange,
   markRequest,
   onMarkRequestApplied,
+  cursorHint,
+  cursorHintKey,
 }: Props) {
   const realtimeRequested = process.env.NEXT_PUBLIC_WITHMD_ENABLE_REALTIME === '1';
   const realtimeExperimental = process.env.NEXT_PUBLIC_WITHMD_ENABLE_REALTIME_EXPERIMENTAL === '1';
@@ -227,6 +257,9 @@ export default function CollabEditor({
 
   const editor = useEditor({
     immediatelyRender: false,
+    editorProps: {
+      attributes: { class: 'withmd-prose' },
+    },
     extensions: buildEditorExtensions({
       ydoc,
       provider,
@@ -391,6 +424,67 @@ export default function CollabEditor({
     focusEditorRange(editor, target.from, target.to);
   }, [editor, focusRequestId, focusedComment]);
 
+  const lastAppliedKeyRef = useRef<number>(-1);
+  useEffect(() => {
+    if (!editor || !cursorHint || typeof cursorHintKey !== 'number') return;
+    if (cursorHintKey === lastAppliedKeyRef.current) return;
+    lastAppliedKeyRef.current = cursorHintKey;
+
+    const { textFragment, sourceLine, offsetInFragment } = cursorHint;
+    const commands = editor.commands as unknown as {
+      focus: () => boolean;
+      setTextSelection: (pos: number) => boolean;
+    };
+
+    // Try to place cursor at the precise position within the matched text
+    if (textFragment) {
+      const range = findDomRangeByQuote(editor.view.dom, textFragment, 0);
+      if (range) {
+        try {
+          let targetPos: number;
+          if (typeof offsetInFragment === 'number' && offsetInFragment > 0) {
+            const domPoint = domPointAtOffset(range, offsetInFragment);
+            targetPos = domPoint
+              ? editor.view.posAtDOM(domPoint.node, domPoint.offset)
+              : editor.view.posAtDOM(range.startContainer, range.startOffset);
+          } else {
+            targetPos = editor.view.posAtDOM(range.startContainer, range.startOffset);
+          }
+          commands.focus();
+          commands.setTextSelection(targetPos);
+          return;
+        } catch {
+          // fall through to sourceLine
+        }
+      }
+    }
+
+    // Fallback: place cursor at the start of the approximate source line
+    if (typeof sourceLine === 'number') {
+      let blockCount = 0;
+      let targetPos = 1;
+      let found = false;
+      editor.state.doc.descendants((node, pos) => {
+        if (found) return false;
+        if (node.isBlock) {
+          blockCount += 1;
+          if (blockCount >= sourceLine) {
+            targetPos = pos + 1;
+            found = true;
+            return false;
+          }
+        }
+        return true;
+      });
+      commands.focus();
+      commands.setTextSelection(Math.min(targetPos, editor.state.doc.content.size));
+      return;
+    }
+
+    // No hint: just focus the editor
+    commands.focus();
+  }, [editor, cursorHint, cursorHintKey]);
+
   if (!editor) {
     return <p className="withmd-muted-sm">Loading editor...</p>;
   }
@@ -398,13 +492,6 @@ export default function CollabEditor({
   if (realtimeRequested && !realtimeExperimental) {
     return (
       <div className="withmd-column withmd-fill withmd-gap-2">
-        <div className="withmd-muted-xs">
-          Realtime collaboration is currently in safe fallback mode. Set
-          {' '}
-          <code>NEXT_PUBLIC_WITHMD_ENABLE_REALTIME_EXPERIMENTAL=1</code>
-          {' '}
-          to enable the experimental realtime path.
-        </div>
         <div className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill">
           <EditorContent editor={editor} />
         </div>

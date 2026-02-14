@@ -497,7 +497,7 @@ export default function ReadRenderer({
 
   return (
     <div className="withmd-read-layout">
-      <article ref={markdownRef} className="withmd-markdown">
+      <article ref={markdownRef} className="withmd-prose withmd-markdown">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>
       </article>
       {hasPositionedThreads && (
