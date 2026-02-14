@@ -187,14 +187,41 @@
   line-height: 1.45;
   resize: none;
   outline: none;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.withmd-source-editor::-webkit-scrollbar {
+  width: 4px;
+}
+.withmd-source-editor::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 0;
+  transition: background 0.2s;
+}
+.withmd-source-editor::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .withmd-source-readonly {
+  margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-y: auto;
   cursor: text;
   user-select: text;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.withmd-source-readonly::-webkit-scrollbar {
+  width: 4px;
+}
+.withmd-source-readonly::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 0;
+  transition: background 0.2s;
+}
+.withmd-source-readonly::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .withmd-inline-input,
@@ -580,6 +607,7 @@
   grid-template: 1fr / 1fr;
   flex: 1;
   min-height: 0;
+  margin-top: 8px;
 }
 
 .withmd-surface-layer {
@@ -597,12 +625,19 @@
 .withmd-doc-scroll {
   overflow-y: auto;
   overflow-x: hidden;
-  margin-right: -314px;
-  padding-right: 314px;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
 }
 .withmd-doc-scroll::-webkit-scrollbar {
-  display: none;
+  width: 4px;
+}
+.withmd-doc-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 0;
+  transition: background 0.2s;
+}
+.withmd-doc-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .withmd-editor-scroll {
@@ -614,7 +649,7 @@
 .withmd-prose pre,
 .withmd-prose table {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+  scrollbar-color: transparent transparent;
 }
 
 .withmd-editor-scroll::-webkit-scrollbar,
@@ -627,14 +662,29 @@
 .withmd-editor-scroll::-webkit-scrollbar-thumb,
 .withmd-prose pre::-webkit-scrollbar-thumb,
 .withmd-prose table::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: transparent;
   border-radius: 0;
+  transition: background 0.2s;
 }
 
 .withmd-editor-scroll::-webkit-scrollbar-track,
 .withmd-prose pre::-webkit-scrollbar-track,
 .withmd-prose table::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Show scrollbars on hover */
+.withmd-doc-panel:hover .withmd-doc-scroll,
+.withmd-doc-panel:hover .withmd-editor-scroll,
+.withmd-doc-panel:hover .withmd-source-editor,
+.withmd-doc-panel:hover .withmd-source-readonly {
+  scrollbar-color: var(--withmd-glass-scrollbar) transparent;
+}
+.withmd-doc-panel:hover .withmd-doc-scroll::-webkit-scrollbar-thumb,
+.withmd-doc-panel:hover .withmd-editor-scroll::-webkit-scrollbar-thumb,
+.withmd-doc-panel:hover .withmd-source-editor::-webkit-scrollbar-thumb,
+.withmd-doc-panel:hover .withmd-source-readonly::-webkit-scrollbar-thumb {
+  background: var(--withmd-glass-scrollbar);
 }
 
 .withmd-comment-highlight {
@@ -737,19 +787,21 @@
   scrollbar-width: none;
   margin-right: 0;
   padding-right: 0;
+  overflow: hidden;
+  margin-top: 24px;
 }
 .withmd-landing .withmd-doc-scroll::-webkit-scrollbar {
   display: none;
 }
 
 .withmd-landing-inner {
-  padding-bottom: 48px;
+  padding-bottom: 0;
 }
 
 .withmd-landing-title {
   margin: 0;
   font-family: 'Garamond', 'Apple Garamond', 'Iowan Old Style', 'Times New Roman', serif;
-  font-size: 64px;
+  font-size: 54px;
   font-weight: 400;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -758,14 +810,14 @@
 
 .withmd-landing-tagline {
   margin: 10px 0 0;
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 300;
   line-height: 1.5;
   color: var(--withmd-body);
 }
 
 .withmd-landing-cta {
-  margin-top: 16px;
+  margin-top: 24px;
 }
 
 .withmd-btn-landing {
@@ -794,7 +846,7 @@
 
 .withmd-landing-body {
   margin: 8px 0 0;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 300;
   line-height: 1.55;
   color: var(--withmd-body);
@@ -807,8 +859,12 @@
   margin: 28px 0;
 }
 
+.withmd-landing-cta + .withmd-landing-rule {
+  margin-top: 64px;
+}
+
 .withmd-landing-ornament {
-  margin: 80px 0 0;
+  margin: 32px 0 0;
   text-align: center;
   color: var(--withmd-muted);
 }

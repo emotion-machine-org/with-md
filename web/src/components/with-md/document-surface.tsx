@@ -23,12 +23,7 @@ interface Props {
   focusRequestId: number;
   sourceValue: string;
   sourceDirty: boolean;
-  sourceSaving: boolean;
-  canApplySource: boolean;
   onSourceChange(next: string): void;
-  onApplySource(): void;
-  onSaveSource(): void;
-  onDiscardSource(): void;
   onEditorContentChange(next: string): void;
   onSelectionDraftChange(next: CommentSelectionDraft | null): void;
   pendingSelection: CommentSelectionDraft | null;
@@ -55,12 +50,7 @@ export default function DocumentSurface({
   focusRequestId,
   sourceValue,
   sourceDirty,
-  sourceSaving,
-  canApplySource,
   onSourceChange,
-  onApplySource,
-  onSaveSource,
-  onDiscardSource,
   onEditorContentChange,
   onSelectionDraftChange,
   pendingSelection,
@@ -214,13 +204,7 @@ export default function DocumentSurface({
       <div ref={sourceContainerRef} className="withmd-column withmd-fill withmd-gap-3">
         <SourceEditor
           value={sourceValue}
-          isDirty={sourceDirty}
-          isSaving={sourceSaving}
-          canApply={canApplySource}
           onChange={onSourceChange}
-          onApply={onApplySource}
-          onSave={onSaveSource}
-          onDiscard={onDiscardSource}
         />
       </div>
     );

@@ -30,7 +30,6 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [sourceValue, setSourceValue] = useState('');
   const [savedContent, setSavedContent] = useState('');
-  const [isSavingSource, setIsSavingSource] = useState(false);
   const [comments, setComments] = useState<CommentRecord[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -155,47 +154,6 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     setComments(freshComments);
   }, [currentFile]);
 
-  const onSaveSource = useCallback(async () => {
-    if (!currentFile) return;
-    setIsSavingSource(true);
-    setStatusMessage(null);
-
-    try {
-      const result = await api.saveSource({
-        mdFileId: currentFile.mdFileId,
-        sourceContent: sourceValue,
-      });
-      await reloadCurrentFileData();
-      await reloadActivity();
-
-      setStatusMessage(result.changed ? 'Source saved.' : 'No meaningful changes to save.');
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : 'Failed to save source.');
-    } finally {
-      setIsSavingSource(false);
-    }
-  }, [currentFile, reloadActivity, reloadCurrentFileData, sourceValue]);
-
-  const onApplySource = useCallback(() => {
-    if (!currentFile) return;
-
-    setCurrentFile({
-      ...currentFile,
-      content: sourceValue,
-      contentHash: `applied_${Date.now()}`,
-    });
-    setStatusMessage('Source applied to local document. Save to persist.');
-    if (canUseRichEdit) {
-      setUserMode('document');
-    }
-  }, [canUseRichEdit, currentFile, setUserMode, sourceValue]);
-
-  const onDiscardSource = useCallback(() => {
-    if (!currentFile) return;
-    setSourceValue(currentFile.content);
-    setStatusMessage('Source changes discarded.');
-  }, [currentFile]);
-
   useEffect(() => {
     if (!currentFile || !(editing && userMode === 'document')) return;
     if (currentFile.content === savedContent) return;
@@ -219,6 +177,31 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       window.clearTimeout(timeout);
     };
   }, [currentFile, editing, userMode, reloadActivity, savedContent]);
+
+  // Auto-save for source mode (mirrors document-mode auto-save)
+  useEffect(() => {
+    if (!currentFile || !(editing && userMode === 'source')) return;
+    if (!sourceDirty) return;
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const result = await api.saveSource({
+          mdFileId: currentFile.mdFileId,
+          sourceContent: sourceValue,
+        });
+        if (result.changed) {
+          await reloadCurrentFileData();
+          await reloadActivity();
+        }
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : 'Auto-save failed.');
+      }
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [currentFile, editing, userMode, sourceDirty, sourceValue, reloadActivity, reloadCurrentFileData]);
 
   const onCreateComment = useCallback(
     async (input: { body: string; selection: CommentSelectionDraft | null; parentComment?: CommentRecord | null }) => {
@@ -446,12 +429,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   focusRequestId={focusRequestId}
                   sourceValue={sourceValue}
                   sourceDirty={sourceDirty}
-                  sourceSaving={isSavingSource}
-                  canApplySource={canUseRichEdit}
                   onSourceChange={setSourceValue}
-                  onApplySource={onApplySource}
-                  onSaveSource={onSaveSource}
-                  onDiscardSource={onDiscardSource}
                   onEditorContentChange={(next) => {
                     setCurrentFile((prev) => (prev ? { ...prev, content: next } : prev));
                     setSourceValue(next);
