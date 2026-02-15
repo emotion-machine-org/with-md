@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { RepoInfo } from '@/lib/with-md/github';
 
@@ -13,25 +13,47 @@ export default function RepoPicker({ onSelect }: Props) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
     async function load() {
       try {
-        const res = await fetch('/api/github/repos');
+        const res = await fetch('/api/github/repos', { signal: controller.signal });
         if (!res.ok) {
           const body = (await res.json()) as { error?: string };
           throw new Error(body.error ?? `Failed to load repos (${res.status})`);
         }
         const data = (await res.json()) as RepoInfo[];
+        if (!active) return;
         setRepos(data);
       } catch (err) {
+        if (!active) return;
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
         setError(err instanceof Error ? err.message : 'Failed to load repos');
       } finally {
+        if (!active) return;
         setLoading(false);
       }
     }
 
     void load();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   const handleSelect = useCallback(
@@ -60,6 +82,7 @@ export default function RepoPicker({ onSelect }: Props) {
         const data = (await res.json()) as { repoId: string };
         onSelect({ repoId: data.repoId, owner: repo.owner, name: repo.name });
       } catch (err) {
+        if (!mountedRef.current) return;
         setError(err instanceof Error ? err.message : 'Sync failed');
         setSyncing(null);
       }

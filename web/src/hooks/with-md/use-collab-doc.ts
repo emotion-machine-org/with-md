@@ -73,21 +73,16 @@ export function useCollabDoc({ mdFileId, contentHash, token, enabled }: Params) 
     logCollab(`provider:init doc=${mdFileId} token=${token ? 'set' : 'missing'}`);
     const websocketProvider = new HocuspocusProviderWebsocket({
       url,
-      messageReconnectTimeout: 4_000,
-      delay: 250,
-      minDelay: 250,
-      maxDelay: 2_000,
-      factor: 1.5,
-      jitter: false,
+      // We don't publish cursor awareness yet, so keep idle connections alive longer.
+      messageReconnectTimeout: 10 * 60 * 1000,
     });
 
     return new HocuspocusProvider({
       websocketProvider,
       name: mdFileId,
       document: ydoc,
-      token: () => token,
+      token,
       preserveConnection: false,
-      forceSyncInterval: 1_500,
       onStatus({ status }) {
         setConnected(status === 'connected');
         if (status !== 'connected') {

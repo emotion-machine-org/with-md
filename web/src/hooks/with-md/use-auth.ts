@@ -20,9 +20,12 @@ export function useAuth(): AuthState {
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
     async function check() {
       try {
-        const res = await fetch('/api/auth/me');
+        const res = await fetch('/api/auth/me', { signal: controller.signal });
         const data = (await res.json()) as {
           authenticated: boolean;
           userId?: string;
@@ -30,6 +33,7 @@ export function useAuth(): AuthState {
           avatarUrl?: string;
         };
 
+        if (!active) return;
         if (data.authenticated && data.userId && data.githubLogin) {
           setUser({
             userId: data.userId,
@@ -39,14 +43,24 @@ export function useAuth(): AuthState {
         } else {
           setUser(null);
         }
-      } catch {
+      } catch (error) {
+        if (!active) return;
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
         setUser(null);
       } finally {
+        if (!active) return;
         setLoading(false);
       }
     }
 
     void check();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   const login = useCallback(() => {

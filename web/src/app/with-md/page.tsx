@@ -16,9 +16,12 @@ export default function WithMdPage() {
 
   // Check if there's already a real (non-seed) synced repo
   useEffect(() => {
+    let active = true;
+
     async function check() {
       try {
         const repos = await api.listRepos();
+        if (!active) return;
         // Only auto-select repos that came from a real GitHub sync (githubRepoId > 0)
         const realRepo = repos.find((r) => r.githubRepoId && r.githubRepoId > 0);
         if (realRepo) {
@@ -27,11 +30,16 @@ export default function WithMdPage() {
       } catch {
         // No existing repos, show picker
       } finally {
+        if (!active) return;
         setCheckingExisting(false);
       }
     }
 
     void check();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleRepoSelect = useCallback((result: { repoId: string }) => {

@@ -53,6 +53,12 @@ interface PersistResponse {
   documentVersion?: string;
 }
 
+interface PersistNormalizationMetadata {
+  normalized: boolean;
+  repeats: number;
+  strippedLeadingPlaceholders: boolean;
+}
+
 if (!CONVEX_HTTP || !INTERNAL_SECRET) {
   // Keep startup explicit to avoid silent misconfiguration.
   console.warn(
@@ -401,6 +407,18 @@ function preparePersistPayload(documentName: string, document: Y.Doc) {
   }
 }
 
+function toPersistNormalizationMetadata(payload: {
+  normalized: boolean;
+  repeats: number;
+  strippedLeadingPlaceholders: boolean;
+}): PersistNormalizationMetadata {
+  return {
+    normalized: payload.normalized,
+    repeats: payload.repeats,
+    strippedLeadingPlaceholders: payload.strippedLeadingPlaceholders,
+  };
+}
+
 const server = Server.configure({
   port: Number(process.env.PORT ?? 3001),
   debounce: 3000,
@@ -538,11 +556,15 @@ const server = Server.configure({
       }
 
       const yjsSnapshot = payload.yjsSnapshot;
+      const normalization = toPersistNormalizationMetadata(payload);
       clearOversizedReport(documentName);
       const response = (await convexCall('/api/collab/storeDocument', {
         mdFileId: documentName,
         markdownContent,
         yjsState: yjsSnapshot.base64,
+        normalized: normalization.normalized,
+        normalizedRepeats: normalization.repeats,
+        normalizedStrippedLeadingPlaceholders: normalization.strippedLeadingPlaceholders,
       })) as PersistResponse;
       const persistPath = typeof response?.persistPath === 'string' ? response.persistPath : 'normal';
       const persistedYjsBytes = Number.isFinite(response?.yjsBytes) ? Number(response.yjsBytes) : yjsSnapshot.bytes;
@@ -569,62 +591,11 @@ const server = Server.configure({
   async onDisconnect({ documentName, document }) {
     if (document.getConnectionsCount() > 0) return;
 
-    try {
-      const payload = preparePersistPayload(documentName, document);
-      const markdownContent = payload.markdownContent;
-      const markdownBytes = payload.markdownBytes;
-
-      if (markdownBytes > INLINE_REALTIME_MAX_BYTES) {
-        if (shouldReportOversized(documentName, markdownBytes, true)) {
-          await convexCall('/api/collab/storeDocumentOversized', {
-            mdFileId: documentName,
-            markdownBytes,
-            source: 'hocuspocus:onDisconnect',
-          });
-        }
-
-        logInfoThrottled(
-          `disconnect-oversized:${documentName}`,
-          `[with-md:hocuspocus] persist doc=${documentName} bytes=${markdownBytes} path=oversized_fallback_disconnect`,
-        );
-      } else {
-        const yjsSnapshot = payload.yjsSnapshot;
-        clearOversizedReport(documentName);
-        const response = (await convexCall('/api/collab/onAllDisconnected', {
-          mdFileId: documentName,
-          markdownContent,
-          yjsState: yjsSnapshot.base64,
-        })) as PersistResponse;
-        const persistPath = typeof response?.persistPath === 'string' ? response.persistPath : 'normal_disconnect';
-        const persistedYjsBytes = Number.isFinite(response?.yjsBytes) ? Number(response.yjsBytes) : yjsSnapshot.bytes;
-        if (typeof response?.documentVersion === 'string') {
-          loadedVersionByDoc.set(documentName, response.documentVersion);
-        }
-        const normalizedTag = payload.normalized
-          ? ` normalized=true repeats=${payload.repeats} strippedPlaceholders=${payload.strippedLeadingPlaceholders ? 'true' : 'false'}`
-          : '';
-
-        logInfoThrottled(
-          `disconnect-normal:${documentName}`,
-          `[with-md:hocuspocus] persist doc=${documentName} bytes=${markdownBytes} yjsBytes=${persistedYjsBytes} path=${persistPath}${normalizedTag}`,
-        );
-      }
-
-      if (document.getConnectionsCount() > 0) {
-        console.info(`[with-md:hocuspocus] disconnect doc=${documentName} path=skip_clear_reconnected`);
-        return;
-      }
-
-      clearDocumentState(document);
-      clearBootstrapState(documentName);
-      console.info(`[with-md:hocuspocus] disconnect doc=${documentName} path=cleared_for_next_bootstrap`);
-    } catch (error) {
-      logErrorThrottled(
-        `disconnect-error:${documentName}`,
-        `[with-md:hocuspocus] persist doc=${documentName} path=disconnect_error`,
-        error,
-      );
-    }
+    // Let Hocuspocus run the canonical final onStoreDocument flush and unload lifecycle.
+    // A second manual store/clear here can race with that path and corrupt state.
+    clearOversizedReport(documentName);
+    clearBootstrapState(documentName);
+    console.info(`[with-md:hocuspocus] disconnect doc=${documentName} path=all_disconnected awaiting_core_store_flush`);
   },
 });
 

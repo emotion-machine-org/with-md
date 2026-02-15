@@ -111,6 +111,9 @@ http.route({
       mdFileId: string;
       markdownContent: string;
       yjsState?: string;
+      normalized?: boolean;
+      normalizedRepeats?: number;
+      normalizedStrippedLeadingPlaceholders?: boolean;
     };
 
     const markdownContent = body.markdownContent ?? '';
@@ -131,6 +134,9 @@ http.route({
         mdFileId: body.mdFileId as never,
         markdownContent,
         yjsStateStorageId: persistedSnapshot?.storageId as never,
+        normalized: body.normalized,
+        normalizedRepeats: body.normalizedRepeats,
+        normalizedStrippedLeadingPlaceholders: body.normalizedStrippedLeadingPlaceholders,
       });
       const parsed = (
         result as {
@@ -201,6 +207,9 @@ http.route({
       mdFileId: string;
       markdownContent: string;
       yjsState?: string;
+      normalized?: boolean;
+      normalizedRepeats?: number;
+      normalizedStrippedLeadingPlaceholders?: boolean;
     };
 
     const markdownContent = body.markdownContent ?? '';
@@ -221,6 +230,9 @@ http.route({
         mdFileId: body.mdFileId as never,
         markdownContent,
         yjsStateStorageId: persistedSnapshot?.storageId as never,
+        normalized: body.normalized,
+        normalizedRepeats: body.normalizedRepeats,
+        normalizedStrippedLeadingPlaceholders: body.normalizedStrippedLeadingPlaceholders,
       });
       const parsed = (
         result as {

@@ -41,54 +41,69 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [markRequest, setMarkRequest] = useState<{ requestId: number; commentMarkId: string; from: number; to: number } | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     async function bootstrap() {
-      const loadedRepos = await api.listRepos();
-      setRepos(loadedRepos);
+      try {
+        const loadedRepos = await api.listRepos();
+        if (!active) return;
+        setRepos(loadedRepos);
 
-      const selectedRepo = loadedRepos.find((repo) => repo.repoId === repoId) ?? loadedRepos[0];
-      const nextRepoId = selectedRepo?.repoId;
-      if (!nextRepoId) {
-        setActiveRepoId('');
-        setFiles([]);
-        setCurrentFile(null);
-        return;
-      }
-      setActiveRepoId(nextRepoId);
-
-      const loadedFiles = await api.listFilesByRepo(nextRepoId);
-      setFiles(loadedFiles);
-
-      let targetFile: MdFile | null = null;
-      if (filePath) {
-        targetFile =
-          loadedFiles.find((file) => file.path === filePath) ??
-          (await api.resolveByPath(nextRepoId, filePath));
-        if (!targetFile) {
-          setStatusMessage(
-            loadedFiles[0]
-              ? `Requested path "${filePath}" not found. Showing "${loadedFiles[0].path}".`
-              : `Requested path "${filePath}" not found.`,
-          );
+        const selectedRepo = loadedRepos.find((repo) => repo.repoId === repoId) ?? loadedRepos[0];
+        const nextRepoId = selectedRepo?.repoId;
+        if (!nextRepoId) {
+          setActiveRepoId('');
+          setFiles([]);
+          setCurrentFile(null);
+          return;
         }
-      }
-      if (!targetFile) {
-        targetFile = loadedFiles[0] ?? null;
-      }
-      setCurrentFile(targetFile);
+        setActiveRepoId(nextRepoId);
 
-      if (targetFile) {
-        setSourceValue(targetFile.content);
-        setSavedContent(targetFile.content);
-        const [loadedComments, loadedActivity] = await Promise.all([
-          api.listCommentsByFile(targetFile.mdFileId),
-          api.listActivity(nextRepoId),
-        ]);
-        setComments(loadedComments);
-        setActivity(loadedActivity);
+        const loadedFiles = await api.listFilesByRepo(nextRepoId);
+        if (!active) return;
+        setFiles(loadedFiles);
+
+        let targetFile: MdFile | null = null;
+        if (filePath) {
+          targetFile =
+            loadedFiles.find((file) => file.path === filePath) ??
+            (await api.resolveByPath(nextRepoId, filePath));
+          if (!active) return;
+          if (!targetFile) {
+            setStatusMessage(
+              loadedFiles[0]
+                ? `Requested path "${filePath}" not found. Showing "${loadedFiles[0].path}".`
+                : `Requested path "${filePath}" not found.`,
+            );
+          }
+        }
+        if (!targetFile) {
+          targetFile = loadedFiles[0] ?? null;
+        }
+        setCurrentFile(targetFile);
+
+        if (targetFile) {
+          setSourceValue(targetFile.content);
+          setSavedContent(targetFile.content);
+          const [loadedComments, loadedActivity] = await Promise.all([
+            api.listCommentsByFile(targetFile.mdFileId),
+            api.listActivity(nextRepoId),
+          ]);
+          if (!active) return;
+          setComments(loadedComments);
+          setActivity(loadedActivity);
+        }
+      } catch (error) {
+        if (!active) return;
+        setStatusMessage(error instanceof Error ? error.message : 'Failed to load workspace.');
       }
     }
 
     void bootstrap();
+
+    return () => {
+      active = false;
+    };
   }, [filePath, repoId]);
 
   useEffect(() => {
@@ -173,6 +188,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     if (!currentFile || userMode !== 'document') return;
     if (realtimeEnabled) return;
     if (currentFile.content === savedContent) return;
+    let active = true;
 
     const timeout = window.setTimeout(async () => {
       try {
@@ -180,16 +196,19 @@ export default function WithMdShell({ repoId, filePath }: Props) {
           mdFileId: currentFile.mdFileId,
           sourceContent: currentFile.content,
         });
+        if (!active) return;
         if (result.changed) {
           setSavedContent(currentFile.content);
           await reloadActivity();
         }
       } catch (error) {
+        if (!active) return;
         setStatusMessage(error instanceof Error ? error.message : 'Auto-save failed.');
       }
     }, 1200);
 
     return () => {
+      active = false;
       window.clearTimeout(timeout);
     };
   }, [currentFile, userMode, reloadActivity, savedContent, realtimeEnabled]);
@@ -198,6 +217,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   useEffect(() => {
     if (!currentFile || userMode !== 'source') return;
     if (!sourceDirty) return;
+    let active = true;
 
     const timeout = window.setTimeout(async () => {
       try {
@@ -205,16 +225,19 @@ export default function WithMdShell({ repoId, filePath }: Props) {
           mdFileId: currentFile.mdFileId,
           sourceContent: sourceValue,
         });
+        if (!active) return;
         if (result.changed) {
           await reloadCurrentFileData();
           await reloadActivity();
         }
       } catch (error) {
+        if (!active) return;
         setStatusMessage(error instanceof Error ? error.message : 'Auto-save failed.');
       }
     }, 1200);
 
     return () => {
+      active = false;
       window.clearTimeout(timeout);
     };
   }, [currentFile, userMode, sourceDirty, sourceValue, reloadActivity, reloadCurrentFileData]);

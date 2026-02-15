@@ -32,6 +32,12 @@ interface SanitizedRealtimeMarkdown {
   strippedLeadingPlaceholders: boolean;
 }
 
+interface PersistNormalizationSignal {
+  normalized?: boolean;
+  normalizedRepeats?: number;
+  normalizedStrippedLeadingPlaceholders?: boolean;
+}
+
 function stripLeadingPlaceholderParagraphs(content: string): { content: string; stripped: boolean } {
   if (!content) return { content, stripped: false };
 
@@ -146,6 +152,30 @@ function sanitizeRealtimeMarkdown(content: string): SanitizedRealtimeMarkdown {
   };
 }
 
+function hasNormalizationSignal(
+  signal: PersistNormalizationSignal,
+  sanitizedIncoming: SanitizedRealtimeMarkdown,
+): boolean {
+  if (sanitizedIncoming.repeats > 1 || sanitizedIncoming.strippedLeadingPlaceholders) {
+    return true;
+  }
+  if (signal.normalized) {
+    return true;
+  }
+  if ((signal.normalizedRepeats ?? 1) > 1) {
+    return true;
+  }
+  return Boolean(signal.normalizedStrippedLeadingPlaceholders);
+}
+
+function matchesCollapsedExistingContent(existingContent: string, incomingContent: string): boolean {
+  const collapsedExisting = sanitizeRealtimeMarkdown(existingContent);
+  if (collapsedExisting.repeats <= 1 && !collapsedExisting.strippedLeadingPlaceholders) {
+    return false;
+  }
+  return !hasMeaningfulDiff(collapsedExisting.content, incomingContent);
+}
+
 function shouldRejectSuspiciousRealtimeShrink(existingBytes: number, incomingBytes: number): boolean {
   if (existingBytes < REALTIME_SHRINK_GUARD_MIN_BYTES) return false;
   if (incomingBytes >= existingBytes) return false;
@@ -239,6 +269,9 @@ export const storeDocument = internalMutation({
     mdFileId: v.id('mdFiles'),
     markdownContent: v.string(),
     yjsStateStorageId: v.optional(v.id('_storage')),
+    normalized: v.optional(v.boolean()),
+    normalizedRepeats: v.optional(v.number()),
+    normalizedStrippedLeadingPlaceholders: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const file = await ctx.db.get(args.mdFileId);
@@ -270,8 +303,17 @@ export const storeDocument = internalMutation({
       };
     }
 
+    const normalizationSignal: PersistNormalizationSignal = {
+      normalized: args.normalized,
+      normalizedRepeats: args.normalizedRepeats,
+      normalizedStrippedLeadingPlaceholders: args.normalizedStrippedLeadingPlaceholders,
+    };
     const allowsRepairingShrink =
-      markdownBytes < existingBytes && (sanitized.repeats > 1 || sanitized.strippedLeadingPlaceholders);
+      markdownBytes < existingBytes &&
+      (
+        hasNormalizationSignal(normalizationSignal, sanitized) ||
+        matchesCollapsedExistingContent(file.content, markdownContent)
+      );
     if (!allowsRepairingShrink && shouldRejectSuspiciousRealtimeShrink(existingBytes, markdownBytes)) {
       const now = Date.now();
       await ctx.db.patch(file._id, { editHeartbeat: now });
@@ -384,6 +426,9 @@ export const onAllDisconnected = internalMutation({
     mdFileId: v.id('mdFiles'),
     markdownContent: v.string(),
     yjsStateStorageId: v.optional(v.id('_storage')),
+    normalized: v.optional(v.boolean()),
+    normalizedRepeats: v.optional(v.number()),
+    normalizedStrippedLeadingPlaceholders: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const file = await ctx.db.get(args.mdFileId);
@@ -415,8 +460,17 @@ export const onAllDisconnected = internalMutation({
       };
     }
 
+    const normalizationSignal: PersistNormalizationSignal = {
+      normalized: args.normalized,
+      normalizedRepeats: args.normalizedRepeats,
+      normalizedStrippedLeadingPlaceholders: args.normalizedStrippedLeadingPlaceholders,
+    };
     const allowsRepairingShrink =
-      markdownBytes < existingBytes && (sanitized.repeats > 1 || sanitized.strippedLeadingPlaceholders);
+      markdownBytes < existingBytes &&
+      (
+        hasNormalizationSignal(normalizationSignal, sanitized) ||
+        matchesCollapsedExistingContent(file.content, markdownContent)
+      );
     if (!allowsRepairingShrink && shouldRejectSuspiciousRealtimeShrink(existingBytes, markdownBytes)) {
       const now = Date.now();
       await ctx.db.patch(file._id, { editHeartbeat: now });
