@@ -1,5 +1,4 @@
 import Collaboration from '@tiptap/extension-collaboration';
-import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 import * as Y from 'yjs';
@@ -13,21 +12,27 @@ export function buildEditorExtensions(params: {
   user: { name: string; color: string };
   enableRealtime: boolean;
 }) {
-  const base = [
-    StarterKit,
-    Markdown,
+  // TipTap collaboration requires disabling StarterKit history plugin.
+  const starterKit = StarterKit.configure({
+    undoRedo: params.enableRealtime ? false : {},
+  });
+
+  const baseCore = [
+    starterKit,
     CommentMark,
     TableBlock,
   ];
 
-  if (!params.enableRealtime || !params.provider) return base;
+  if (!params.enableRealtime || !params.provider) {
+    return [
+      ...baseCore,
+      Markdown,
+    ];
+  }
 
+  // Realtime profile keeps table node schema parity with server-side markdown parsing.
   return [
-    ...base,
+    ...baseCore,
     Collaboration.configure({ document: params.ydoc }),
-    CollaborationCursor.configure({
-      provider: params.provider as never,
-      user: params.user,
-    }),
   ];
 }

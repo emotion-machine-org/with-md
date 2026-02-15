@@ -39,6 +39,9 @@ export default defineSchema({
     pendingGithubSha: v.optional(v.string()),
     syntaxSupportStatus: v.optional(v.string()),
     syntaxSupportReasons: v.optional(v.array(v.string())),
+    isOversized: v.optional(v.boolean()),
+    lastOversizeBytes: v.optional(v.number()),
+    oversizeUpdatedAt: v.optional(v.number()),
   })
     .index('by_repo_and_path', ['repoId', 'path'])
     .index('by_repo_and_category', ['repoId', 'fileCategory'])

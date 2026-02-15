@@ -28,6 +28,7 @@ async function applyFallbackFiles(ctx: MutationCtx, repoId: Id<'repos'>, overwri
         lastSyncedAt: Date.now(),
         syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
         syntaxSupportReasons: syntax.reasons,
+        isOversized: false,
       });
       continue;
     }
@@ -47,6 +48,9 @@ async function applyFallbackFiles(ctx: MutationCtx, repoId: Id<'repos'>, overwri
         pendingGithubContent: undefined,
         pendingGithubSha: undefined,
         yjsStateStorageId: undefined,
+        isOversized: false,
+        lastOversizeBytes: undefined,
+        oversizeUpdatedAt: undefined,
       });
       continue;
     }

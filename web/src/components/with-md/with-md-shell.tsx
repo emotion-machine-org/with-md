@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import CommentsSidebar from '@/components/with-md/comments-sidebar';
 import DocumentSurface from '@/components/with-md/document-surface';
@@ -10,7 +10,9 @@ import { useAuth } from '@/hooks/with-md/use-auth';
 import { useCommentAnchors } from '@/hooks/with-md/use-comment-anchors';
 import { useDocMode } from '@/hooks/with-md/use-doc-mode';
 import { getWithMdApi } from '@/lib/with-md/api';
+import { INLINE_REALTIME_MAX_BYTES, markdownByteLength } from '@/lib/with-md/collab-policy';
 import { hasMeaningfulDiff } from '@/lib/with-md/markdown-diff';
+import { detectUnsupportedSyntax } from '@/lib/with-md/syntax';
 import type { ActivityItem, CommentRecord, CommentSelectionDraft, MdFile, RepoSummary } from '@/lib/with-md/types';
 
 interface Props {
@@ -99,21 +101,34 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     setMarkRequest(null);
   }, [currentFile?.mdFileId]);
 
-  const syntaxSupported = currentFile?.syntaxSupportStatus !== 'unsupported';
-  const { userMode, editing, setUserMode, activateEditing, deactivateEditing, canUseRichEdit } = useDocMode(syntaxSupported);
+  const localSyntax = useMemo(
+    () => (currentFile ? detectUnsupportedSyntax(currentFile.content) : { supported: true, reasons: [] as string[] }),
+    [currentFile?.content],
+  );
+  const syntaxReasons = useMemo(() => {
+    const persisted = currentFile?.syntaxSupportReasons ?? [];
+    return Array.from(new Set([...persisted, ...localSyntax.reasons]));
+  }, [currentFile?.syntaxSupportReasons, localSyntax.reasons]);
+  const syntaxSupported = currentFile
+    ? currentFile.syntaxSupportStatus !== 'unsupported' && localSyntax.supported
+    : true;
+  const { userMode, setUserMode, canUseRichEdit } = useDocMode(syntaxSupported);
   const sourceDirty = Boolean(currentFile && hasMeaningfulDiff(sourceValue, currentFile.content));
+  const realtimeRequested = process.env.NEXT_PUBLIC_WITHMD_ENABLE_REALTIME === '1';
+  const currentMarkdownBytes = currentFile ? markdownByteLength(currentFile.content) : 0;
+  const localInlineRealtimeOversized = currentMarkdownBytes > INLINE_REALTIME_MAX_BYTES;
+  const inlineRealtimeOversized = Boolean(currentFile && (currentFile.isOversized || localInlineRealtimeOversized));
+  const realtimeEnabled = realtimeRequested && !inlineRealtimeOversized;
+  const realtimeSafeModeMessage =
+    realtimeRequested && inlineRealtimeOversized
+      ? 'File too large for inline realtime persistence; using safe mode. Live collaboration stays in-session until size drops.'
+      : null;
 
   useEffect(() => {
     if (userMode === 'source') {
       setPendingSelection(null);
     }
   }, [userMode]);
-
-  useEffect(() => {
-    if (editing) {
-      setPendingSelection(null);
-    }
-  }, [editing]);
 
   useEffect(() => {
     if (!pendingSelection) return;
@@ -155,7 +170,8 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   }, [currentFile]);
 
   useEffect(() => {
-    if (!currentFile || !(editing && userMode === 'document')) return;
+    if (!currentFile || userMode !== 'document') return;
+    if (realtimeEnabled) return;
     if (currentFile.content === savedContent) return;
 
     const timeout = window.setTimeout(async () => {
@@ -176,11 +192,11 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [currentFile, editing, userMode, reloadActivity, savedContent]);
+  }, [currentFile, userMode, reloadActivity, savedContent, realtimeEnabled]);
 
   // Auto-save for source mode (mirrors document-mode auto-save)
   useEffect(() => {
-    if (!currentFile || !(editing && userMode === 'source')) return;
+    if (!currentFile || userMode !== 'source') return;
     if (!sourceDirty) return;
 
     const timeout = window.setTimeout(async () => {
@@ -201,7 +217,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [currentFile, editing, userMode, sourceDirty, sourceValue, reloadActivity, reloadCurrentFileData]);
+  }, [currentFile, userMode, sourceDirty, sourceValue, reloadActivity, reloadCurrentFileData]);
 
   const onCreateComment = useCallback(
     async (input: { body: string; selection: CommentSelectionDraft | null; parentComment?: CommentRecord | null }) => {
@@ -356,7 +372,6 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   }, []);
 
   const activeComment = comments.find((comment) => comment.id === activeCommentId) ?? null;
-  const activeAnchorMatch = activeComment ? (anchorMap.get(activeComment.id) ?? null) : null;
 
   if (!currentFile) {
     return (
@@ -392,8 +407,9 @@ export default function WithMdShell({ repoId, filePath }: Props) {
             <DocumentToolbar
               userMode={userMode}
               canUseRichEdit={canUseRichEdit}
-              syntaxReasons={currentFile.syntaxSupportReasons ?? []}
+              syntaxReasons={syntaxReasons}
               statusMessage={statusMessage}
+              realtimeSafeModeMessage={realtimeSafeModeMessage}
               user={user ?? undefined}
               onUserModeChange={setUserMode}
               onPush={onPush}
@@ -418,17 +434,16 @@ export default function WithMdShell({ repoId, filePath }: Props) {
               <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill">
                 <DocumentSurface
                   mdFileId={currentFile.mdFileId}
+                  contentHash={currentFile.contentHash}
+                  realtimeEnabled={realtimeEnabled}
                   userMode={userMode}
-                  editing={editing}
-                  readContent={currentFile.content}
+                  content={currentFile.content}
                   comments={comments}
                   anchorByCommentId={anchorMap}
-                  focusedCommentId={activeComment?.id ?? null}
+                  activeCommentId={activeComment?.id ?? null}
                   focusedComment={activeComment}
-                  focusedAnchorMatch={activeAnchorMatch}
                   focusRequestId={focusRequestId}
                   sourceValue={sourceValue}
-                  sourceDirty={sourceDirty}
                   onSourceChange={setSourceValue}
                   onEditorContentChange={(next) => {
                     setCurrentFile((prev) => (prev ? { ...prev, content: next } : prev));
@@ -464,8 +479,6 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   onMarkRequestApplied={(requestId) => {
                     setMarkRequest((prev) => (prev?.requestId === requestId ? null : prev));
                   }}
-                  onActivateEditing={activateEditing}
-                  onDeactivateEditing={deactivateEditing}
                 />
               </div>
             </div>

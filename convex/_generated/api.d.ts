@@ -13,6 +13,7 @@ import type * as collab from "../collab.js";
 import type * as comments from "../comments.js";
 import type * as http from "../http.js";
 import type * as installations from "../installations.js";
+import type * as lib_collabPolicy from "../lib/collabPolicy.js";
 import type * as lib_markdownDiff from "../lib/markdownDiff.js";
 import type * as lib_syntax from "../lib/syntax.js";
 import type * as mdFiles from "../mdFiles.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   comments: typeof comments;
   http: typeof http;
   installations: typeof installations;
+  "lib/collabPolicy": typeof lib_collabPolicy;
   "lib/markdownDiff": typeof lib_markdownDiff;
   "lib/syntax": typeof lib_syntax;
   mdFiles: typeof mdFiles;

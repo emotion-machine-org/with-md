@@ -56,6 +56,9 @@ interface WithMdFileRow {
   deletedAt?: number;
   syntaxSupportStatus?: string;
   syntaxSupportReasons?: string[];
+  isOversized?: boolean;
+  lastOversizeBytes?: number;
+  oversizeUpdatedAt?: number;
 }
 
 interface WithMdCommentRow {
@@ -158,6 +161,9 @@ function mapFile(row: WithMdFileRow): MdFile {
     deletedAt: row.deletedAt,
     syntaxSupportStatus: syntax.status,
     syntaxSupportReasons: syntax.reasons,
+    isOversized: row.isOversized,
+    lastOversizeBytes: row.lastOversizeBytes,
+    oversizeUpdatedAt: row.oversizeUpdatedAt,
   };
 }
 
@@ -263,21 +269,21 @@ const convexApi: WithMdApi = {
     const bestQuoteIndex = input.textQuote
       ? pickBestQuoteIndex(file.content, input.textQuote, {
           fallbackLine: input.fallbackLine,
-          preferredStart: input.rangeStart,
           anchorPrefix: input.anchorPrefix,
           anchorSuffix: input.anchorSuffix,
           anchorHeadingPath: input.anchorHeadingPath,
         })
       : undefined;
 
-    const persistedRangeStart = typeof input.rangeStart === 'number'
-      ? input.rangeStart
-      : bestQuoteIndex;
-    const persistedRangeEnd = typeof input.rangeEnd === 'number'
-      ? input.rangeEnd
-      : (typeof persistedRangeStart === 'number' && input.textQuote
-        ? persistedRangeStart + input.textQuote.length
-        : undefined);
+    const hasValidProvidedRangeStart = typeof input.rangeStart === 'number'
+      && input.rangeStart >= 0
+      && (!input.textQuote || file.content.slice(input.rangeStart, input.rangeStart + input.textQuote.length) === input.textQuote);
+    const persistedRangeStart = typeof bestQuoteIndex === 'number'
+      ? bestQuoteIndex
+      : (hasValidProvidedRangeStart ? input.rangeStart : undefined);
+    const persistedRangeEnd = typeof persistedRangeStart === 'number' && input.textQuote
+      ? persistedRangeStart + input.textQuote.length
+      : (typeof input.rangeEnd === 'number' ? input.rangeEnd : undefined);
 
     const anchorAt = typeof persistedRangeStart === 'number'
       ? persistedRangeStart

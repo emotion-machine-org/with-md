@@ -1,13 +1,38 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
+import { markdownByteLength } from './lib/collabPolicy';
+
 export const listByRepo = query({
   args: { repoId: v.id('repos') },
   handler: async (ctx, args) => {
-    return ctx.db
+    const queued = await ctx.db
       .query('pushQueue')
       .withIndex('by_repo_and_status', (q) => q.eq('repoId', args.repoId).eq('status', 'queued'))
       .collect();
+
+    return queued.sort((a, b) => a.createdAt - b.createdAt || a._creationTime - b._creationTime);
+  },
+});
+
+export const listByRepoMeta = query({
+  args: { repoId: v.id('repos') },
+  handler: async (ctx, args) => {
+    const queued = await ctx.db
+      .query('pushQueue')
+      .withIndex('by_repo_and_status', (q) => q.eq('repoId', args.repoId).eq('status', 'queued'))
+      .collect();
+
+    return queued
+      .map((item) => ({
+        pushQueueId: item._id,
+        mdFileId: item.mdFileId,
+        path: item.path,
+        status: item.status,
+        createdAt: item.createdAt,
+        newContentBytes: markdownByteLength(item.newContent),
+      }))
+      .sort((a, b) => a.createdAt - b.createdAt);
   },
 });
 

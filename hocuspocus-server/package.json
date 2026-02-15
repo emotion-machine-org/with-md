@@ -12,6 +12,7 @@
     "@tiptap/core": "^3.0.0",
     "@tiptap/markdown": "^3.0.0",
     "@tiptap/starter-kit": "^3.0.0",
+    "y-prosemirror": "^1.2.6",
     "yjs": "^13.6.24"
   },
   "devDependencies": {

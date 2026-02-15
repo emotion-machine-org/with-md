@@ -13,6 +13,7 @@ interface Props {
   canUseRichEdit: boolean;
   syntaxReasons: string[];
   statusMessage: string | null;
+  realtimeSafeModeMessage?: string | null;
   user?: AuthUser;
   onUserModeChange(next: UserMode): void;
   onPush(): void;
@@ -67,6 +68,7 @@ export default function DocumentToolbar({
   canUseRichEdit,
   syntaxReasons,
   statusMessage,
+  realtimeSafeModeMessage,
   user,
   onUserModeChange,
   onPush,
@@ -75,7 +77,6 @@ export default function DocumentToolbar({
   onLogout,
 }: Props) {
   const syntaxLabel = syntaxReasons.map((reason) => SYNTAX_REASON_LABELS[reason] ?? reason).join(', ');
-
   return (
     <header className="withmd-dock-wrap">
       <div className="withmd-dock">
@@ -139,28 +140,18 @@ export default function DocumentToolbar({
         </p>
       )}
 
+      {realtimeSafeModeMessage && (
+        <p className="withmd-warning withmd-mt-2 withmd-dock-note">
+          {realtimeSafeModeMessage}
+        </p>
+      )}
+
       {statusMessage && (
         <div className="withmd-row withmd-gap-2 withmd-mt-2 withmd-dock-meta">
           <span className="withmd-muted-xs withmd-dock-status">{statusMessage}</span>
         </div>
       )}
     </header>
-  );
-}
-
-function ReadIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-    </svg>
-  );
-}
-
-function EditIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M3 17.5V21h3.5L19 8.5 15.5 5 3 17.5zm17.7-10.8a1 1 0 0 0 0-1.4l-2-2a1 1 0 0 0-1.4 0l-1.2 1.2 3.5 3.5 1.1-1.2z" />
-    </svg>
   );
 }
 

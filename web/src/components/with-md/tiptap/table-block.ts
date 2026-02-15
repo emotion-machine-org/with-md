@@ -57,14 +57,20 @@ export const TableBlock = Node.create({
 
         const pos = typeof getPos === 'function' ? getPos() : null;
         if (pos != null && newRaw !== currentRaw) {
-          const nodeAtPos = editor.state.doc.nodeAt(pos);
+          const state = (editor as { state?: { doc?: { nodeAt: (pos: number) => unknown }; tr?: unknown } }).state;
+          if (!state?.doc || !state.tr) {
+            renderTable(newRaw);
+            return;
+          }
+          const nodeAtPos = state.doc.nodeAt(pos) as { attrs?: Record<string, unknown> } | null;
           if (nodeAtPos) {
-            editor.view.dispatch(
-              editor.state.tr.setNodeMarkup(pos, undefined, {
-                ...nodeAtPos.attrs,
-                rawMarkdown: newRaw,
-              }),
-            );
+            const tr = (state.tr as {
+              setNodeMarkup: (pos: number, type: undefined, attrs: Record<string, unknown>) => unknown;
+            }).setNodeMarkup(pos, undefined, {
+              ...(nodeAtPos.attrs ?? {}),
+              rawMarkdown: newRaw,
+            });
+            editor.view.dispatch(tr as never);
           }
         }
 

@@ -1,41 +1,27 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { UserMode } from '@/lib/with-md/types';
 
 export function useDocMode(syntaxSupported: boolean) {
-  const [userMode, setUserModeState] = useState<UserMode>('document');
-  const [editing, setEditing] = useState(false);
+  const [userMode, setUserModeState] = useState<UserMode>(syntaxSupported ? 'document' : 'source');
 
-  const setUserMode = useCallback(
-    (next: UserMode) => {
-      setUserModeState(next);
-      setEditing(false);
-    },
-    [],
-  );
-
-  const activateEditing = useCallback(() => {
-    setUserModeState((current) => {
-      if (current === 'document' && !syntaxSupported) {
-        // Unsupported syntax: redirect to source editing
-        setEditing(true);
-        return 'source';
-      }
-      setEditing(true);
-      return current;
-    });
+  useEffect(() => {
+    if (!syntaxSupported) {
+      setUserModeState('source');
+    }
   }, [syntaxSupported]);
 
-  const deactivateEditing = useCallback(() => {
-    setEditing(false);
-  }, []);
+  const setUserMode = useCallback((next: UserMode) => {
+    if (next === 'document' && !syntaxSupported) {
+      setUserModeState('source');
+      return;
+    }
+    setUserModeState(next);
+  }, [syntaxSupported]);
 
   return {
     userMode,
-    editing,
     setUserMode,
-    activateEditing,
-    deactivateEditing,
     canUseRichEdit: syntaxSupported,
   };
 }

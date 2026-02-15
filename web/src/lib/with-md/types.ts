@@ -42,6 +42,9 @@ export interface MdFile {
   deletedAt?: number;
   syntaxSupportStatus?: SyntaxSupportStatus;
   syntaxSupportReasons?: string[];
+  isOversized?: boolean;
+  lastOversizeBytes?: number;
+  oversizeUpdatedAt?: number;
 }
 
 export interface CommentAnchorSnapshot {

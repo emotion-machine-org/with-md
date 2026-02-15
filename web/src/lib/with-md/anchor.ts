@@ -301,6 +301,20 @@ export function recoverAnchor(markdown: string, anchor: CommentAnchorSnapshot): 
       : (quote ? start + quote.length : start);
     const slice = markdown.slice(start, end);
     if (!quote || slice === quote || normalizedEquals(slice, quote)) {
+      if (quote) {
+        const duplicateHits = findAllIndices(markdown, quote);
+        if (duplicateHits.length > 1) {
+          const contextBest = pickBestQuoteIndex(markdown, quote, {
+            fallbackLine: anchor.fallbackLine,
+            anchorPrefix: anchor.anchorPrefix,
+            anchorSuffix: anchor.anchorSuffix,
+            anchorHeadingPath: anchor.anchorHeadingPath,
+          });
+          if (typeof contextBest === 'number' && contextBest !== start) {
+            return span(contextBest, quote.length);
+          }
+        }
+      }
       return { start, end };
     }
   }

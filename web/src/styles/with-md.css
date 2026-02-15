@@ -258,7 +258,7 @@
   overflow: hidden;
 }
 
-/* ── Shared prose typography (used by both ReadRenderer and ProseMirror) ── */
+/* Shared prose typography */
 
 .withmd-prose {
   font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -270,16 +270,6 @@
   word-break: break-word;
 }
 
-.withmd-read-layout {
-  display: block;
-  position: relative;
-  min-height: 100%;
-}
-
-.withmd-read-layout-has-threads {
-  display: block;
-}
-
 .withmd-comment-rail {
   position: relative;
   min-height: 100%;
@@ -288,10 +278,12 @@
 .withmd-comment-rail-floating {
   position: absolute;
   top: 0;
+  bottom: 0;
   left: calc(100% + 22px);
   width: 292px;
   z-index: 30;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .withmd-rail-thread {
@@ -606,26 +598,6 @@
   border-radius: 0;
 }
 
-.withmd-surface-stack {
-  display: grid;
-  grid-template: 1fr / 1fr;
-  flex: 1;
-  min-height: 0;
-  margin-top: 8px;
-}
-
-.withmd-surface-layer {
-  grid-area: 1 / 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.withmd-surface-hidden {
-  visibility: hidden;
-  pointer-events: none;
-}
-
 .withmd-doc-scroll {
   overflow-y: auto;
   overflow-x: hidden;
@@ -707,6 +679,13 @@
   border-radius: 0;
   padding: 0;
   background: transparent;
+}
+
+.withmd-editor-shell {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex: 1;
 }
 
 /* ProseMirror-specific overrides (typography inherited from .withmd-prose) */
