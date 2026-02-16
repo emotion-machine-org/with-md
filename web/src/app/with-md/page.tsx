@@ -48,7 +48,7 @@ export default function WithMdPage() {
 
   if (authLoading || checkingExisting) {
     return (
-      <main className="withmd-bg withmd-page withmd-page-pad-6">
+      <main className="withmd-bg withmd-page withmd-initial-picker-center">
         <div className="withmd-repo-picker-panel">
           <div className="withmd-repo-picker-loading">
             <div className="withmd-repo-picker-spinner" />
@@ -61,7 +61,7 @@ export default function WithMdPage() {
 
   if (!selectedRepoId) {
     return (
-      <main className="withmd-bg withmd-page withmd-page-pad-6">
+      <main className="withmd-bg withmd-page withmd-initial-picker-center">
         <RepoPicker onSelect={handleRepoSelect} />
       </main>
     );

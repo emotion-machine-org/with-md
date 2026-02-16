@@ -1297,6 +1297,22 @@
   letter-spacing: 0.01em;
 }
 
+/* ── Initial Repo Picker (centered on first login) ── */
+
+.withmd-initial-picker-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.withmd-initial-picker-center > .withmd-repo-picker-panel {
+  width: 100%;
+  max-width: 520px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
 /* ── Repo Picker Panel & Modal ── */
 
 .withmd-repo-picker-panel {
