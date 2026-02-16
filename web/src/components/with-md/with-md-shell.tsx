@@ -1,11 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import CommentsSidebar from '@/components/with-md/comments-sidebar';
 import DocumentSurface from '@/components/with-md/document-surface';
 import DocumentToolbar from '@/components/with-md/document-toolbar';
 import FileTree from '@/components/with-md/file-tree';
+import ImportDropOverlay from '@/components/with-md/import-drop-overlay';
+import ImportReviewSheet from '@/components/with-md/import-review-sheet';
+import type { ImportReviewRow } from '@/components/with-md/import-review-sheet';
 import { useAuth } from '@/hooks/with-md/use-auth';
 import { useCommentAnchors } from '@/hooks/with-md/use-comment-anchors';
 import { useDocMode } from '@/hooks/with-md/use-doc-mode';
@@ -13,7 +16,7 @@ import { getWithMdApi } from '@/lib/with-md/api';
 import { INLINE_REALTIME_MAX_BYTES, markdownByteLength } from '@/lib/with-md/collab-policy';
 import { hasMeaningfulDiff } from '@/lib/with-md/markdown-diff';
 import { detectUnsupportedSyntax } from '@/lib/with-md/syntax';
-import type { ActivityItem, CommentRecord, CommentSelectionDraft, MdFile, RepoSummary } from '@/lib/with-md/types';
+import type { ActivityItem, CommentRecord, CommentSelectionDraft, ImportConflictMode, MdFile, RepoSummary } from '@/lib/with-md/types';
 
 interface Props {
   repoId?: string;
@@ -22,13 +25,97 @@ interface Props {
 
 const api = getWithMdApi();
 
+interface ImportRowState extends ImportReviewRow {
+  relativePath: string;
+  content: string;
+}
+
+const FILES_PANEL_STORAGE_KEY = 'withmd-files-panel-open';
+
+function readFilesPanelOpenPreference(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.sessionStorage.getItem(FILES_PANEL_STORAGE_KEY) === '1';
+}
+
+function encodePath(path: string): string {
+  return path
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+}
+
+function buildWithMdPath(repo: string, path?: string): string {
+  const encodedRepo = encodeURIComponent(repo);
+  if (!path) return `/with-md/${encodedRepo}`;
+  return `/with-md/${encodedRepo}/${encodePath(path)}`;
+}
+
+function parseWithMdLocationPath(pathname: string): { repoId: string; filePath?: string } | null {
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments[0] !== 'with-md' || !segments[1]) return null;
+  const repo = decodeURIComponent(segments[1]);
+  const fileSegments = segments.slice(2).map((segment) => decodeURIComponent(segment));
+  return {
+    repoId: repo,
+    filePath: fileSegments.length > 0 ? fileSegments.join('/') : undefined,
+  };
+}
+
+function normalizePathInput(path: string): string | null {
+  const normalized = path.replace(/\\/g, '/').replace(/\/{2,}/g, '/').trim().replace(/^\/+|\/+$/g, '');
+  if (!normalized) return null;
+  const segments = normalized.split('/');
+  const cleaned: string[] = [];
+  for (const raw of segments) {
+    const segment = raw.trim();
+    if (!segment || segment === '.') continue;
+    if (segment === '..') return null;
+    cleaned.push(segment);
+  }
+  if (cleaned.length === 0) return null;
+  return cleaned.join('/');
+}
+
+function isMarkdownPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return lower.endsWith('.md') || lower.endsWith('.markdown');
+}
+
+function hasPathConflict(path: string, files: MdFile[]): boolean {
+  return files.some((file) => file.path === path);
+}
+
+function normalizeImportRow(row: ImportRowState, files: MdFile[]): ImportRowState {
+  const normalizedTarget = normalizePathInput(row.targetPath);
+  const isValid = Boolean(normalizedTarget && isMarkdownPath(normalizedTarget));
+  const hasExistingConflict = Boolean(isValid && normalizedTarget && hasPathConflict(normalizedTarget, files));
+  return {
+    ...row,
+    targetPath: normalizedTarget ?? row.targetPath,
+    isValid,
+    hasExistingConflict,
+  };
+}
+
+function remapPathAfterRewrite(currentPath: string, fromPath: string, toPath: string): string | null {
+  if (currentPath === fromPath) return toPath;
+  if (currentPath.startsWith(`${fromPath}/`)) {
+    return `${toPath}${currentPath.slice(fromPath.length)}`;
+  }
+  return null;
+}
+
 export default function WithMdShell({ repoId, filePath }: Props) {
   const { user } = useAuth();
+  const filesPanelRef = useRef<HTMLElement | null>(null);
+  const fileSwitchRequestIdRef = useRef(0);
   const [repos, setRepos] = useState<RepoSummary[]>([]);
   const [activeRepoId, setActiveRepoId] = useState('');
   const [files, setFiles] = useState<MdFile[]>([]);
+  const [queuedGitHubPaths, setQueuedGitHubPaths] = useState<Set<string>>(new Set());
+  const [localEditedPaths, setLocalEditedPaths] = useState<Set<string>>(new Set());
   const [currentFile, setCurrentFile] = useState<MdFile | null>(null);
-  const [filesOpen, setFilesOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(readFilesPanelOpenPreference);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [sourceValue, setSourceValue] = useState('');
   const [savedContent, setSavedContent] = useState('');
@@ -39,6 +126,39 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [focusRequestId, setFocusRequestId] = useState(0);
   const [markRequest, setMarkRequest] = useState<{ requestId: number; commentMarkId: string; from: number; to: number } | null>(null);
+  const [importRows, setImportRows] = useState<ImportRowState[]>([]);
+  const [importReviewOpen, setImportReviewOpen] = useState(false);
+  const [importOverlayVisible, setImportOverlayVisible] = useState(false);
+  const [importProcessing, setImportProcessing] = useState(false);
+  const pendingGitHubPaths = useMemo(() => {
+    const merged = new Set(queuedGitHubPaths);
+    for (const path of localEditedPaths) {
+      merged.add(path);
+    }
+    return merged;
+  }, [queuedGitHubPaths, localEditedPaths]);
+
+  const setUrlForSelection = useCallback((nextRepoId: string, nextPath?: string, mode: 'push' | 'replace' = 'push') => {
+    if (typeof window === 'undefined') return;
+    const target = buildWithMdPath(nextRepoId, nextPath);
+    if (window.location.pathname === target) return;
+    if (mode === 'replace') {
+      window.history.replaceState(window.history.state, '', target);
+      return;
+    }
+    window.history.pushState(window.history.state, '', target);
+  }, []);
+
+  const setCurrentFileContext = useCallback((nextFile: MdFile | null) => {
+    setCurrentFile(nextFile);
+    if (nextFile) {
+      setSourceValue(nextFile.content);
+      setSavedContent(nextFile.content);
+      return;
+    }
+    setSourceValue('');
+    setSavedContent('');
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -54,37 +174,48 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         if (!nextRepoId) {
           setActiveRepoId('');
           setFiles([]);
-          setCurrentFile(null);
+          setQueuedGitHubPaths(new Set());
+          setLocalEditedPaths(new Set());
+          setCurrentFileContext(null);
           return;
         }
         setActiveRepoId(nextRepoId);
 
-        const loadedFiles = await api.listFilesByRepo(nextRepoId);
+        const [loadedFiles, queuedPaths] = await Promise.all([
+          api.listFilesByRepo(nextRepoId),
+          api.listQueuedPaths(nextRepoId),
+        ]);
         if (!active) return;
         setFiles(loadedFiles);
+        setQueuedGitHubPaths(new Set(queuedPaths));
+        setLocalEditedPaths(new Set());
 
         let targetFile: MdFile | null = null;
-        if (filePath) {
+        const parsedLocation = typeof window === 'undefined' ? null : parseWithMdLocationPath(window.location.pathname);
+        const requestedPathFromLocation =
+          parsedLocation?.repoId === nextRepoId
+            ? parsedLocation.filePath
+            : undefined;
+        const requestedPath = filePath ?? requestedPathFromLocation;
+        if (requestedPath) {
           targetFile =
-            loadedFiles.find((file) => file.path === filePath) ??
-            (await api.resolveByPath(nextRepoId, filePath));
+            loadedFiles.find((file) => file.path === requestedPath) ??
+            (await api.resolveByPath(nextRepoId, requestedPath));
           if (!active) return;
           if (!targetFile) {
             setStatusMessage(
               loadedFiles[0]
-                ? `Requested path "${filePath}" not found. Showing "${loadedFiles[0].path}".`
-                : `Requested path "${filePath}" not found.`,
+                ? `Requested path "${requestedPath}" not found. Showing "${loadedFiles[0].path}".`
+                : `Requested path "${requestedPath}" not found.`,
             );
           }
         }
         if (!targetFile) {
           targetFile = loadedFiles[0] ?? null;
         }
-        setCurrentFile(targetFile);
+        setCurrentFileContext(targetFile);
 
         if (targetFile) {
-          setSourceValue(targetFile.content);
-          setSavedContent(targetFile.content);
           const [loadedComments, loadedActivity] = await Promise.all([
             api.listCommentsByFile(targetFile.mdFileId),
             api.listActivity(nextRepoId),
@@ -104,7 +235,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     return () => {
       active = false;
     };
-  }, [filePath, repoId]);
+  }, [filePath, repoId, setCurrentFileContext]);
 
   useEffect(() => {
     if (!currentFile) return;
@@ -146,6 +277,29 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   }, [userMode]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(FILES_PANEL_STORAGE_KEY, filesOpen ? '1' : '0');
+  }, [filesOpen]);
+
+  useEffect(() => {
+    if (!filesOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const targetNode = event.target as Node | null;
+      if (!targetNode) return;
+      if (filesPanelRef.current?.contains(targetNode)) return;
+      const targetElement = targetNode instanceof HTMLElement ? targetNode : targetNode.parentElement;
+      if (targetElement?.closest('.withmd-center')) return;
+      setFilesOpen(false);
+    };
+
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true);
+    };
+  }, [filesOpen]);
+
+  useEffect(() => {
     if (!pendingSelection) return;
 
     const onPointerDown = (event: PointerEvent) => {
@@ -170,6 +324,34 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     setActivity(loaded);
   }, [activeRepoId]);
 
+  const reloadFiles = useCallback(async () => {
+    if (!activeRepoId) {
+      setQueuedGitHubPaths(new Set());
+      setLocalEditedPaths(new Set());
+      return [] as MdFile[];
+    }
+    const [loaded, queuedPaths] = await Promise.all([
+      api.listFilesByRepo(activeRepoId),
+      api.listQueuedPaths(activeRepoId),
+    ]);
+    setFiles(loaded);
+    setQueuedGitHubPaths(new Set(queuedPaths));
+    setLocalEditedPaths(new Set());
+    return loaded;
+  }, [activeRepoId]);
+
+  const setLocalPathDirty = useCallback((path: string, dirty: boolean) => {
+    setLocalEditedPaths((prev) => {
+      const next = new Set(prev);
+      if (dirty) {
+        next.add(path);
+      } else {
+        next.delete(path);
+      }
+      return next;
+    });
+  }, []);
+
   const reloadCurrentFileData = useCallback(async () => {
     if (!currentFile) return;
 
@@ -183,6 +365,45 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     }
     setComments(freshComments);
   }, [currentFile]);
+
+  const selectFileByPath = useCallback(async (
+    targetPath: string,
+    options?: { updateUrl?: boolean; historyMode?: 'push' | 'replace' },
+  ) => {
+    if (!activeRepoId) return;
+    const requestId = ++fileSwitchRequestIdRef.current;
+    let targetFile = files.find((file) => file.path === targetPath) ?? null;
+    if (!targetFile) {
+      targetFile = await api.resolveByPath(activeRepoId, targetPath);
+      if (!targetFile) {
+        if (fileSwitchRequestIdRef.current !== requestId) return;
+        setStatusMessage(`Requested path "${targetPath}" not found.`);
+        return;
+      }
+    }
+    if (fileSwitchRequestIdRef.current !== requestId) return;
+    setCurrentFileContext(targetFile);
+    const loadedComments = await api.listCommentsByFile(targetFile.mdFileId);
+    if (fileSwitchRequestIdRef.current !== requestId) return;
+    setComments(loadedComments);
+    if (options?.updateUrl !== false) {
+      setUrlForSelection(activeRepoId, targetFile.path, options?.historyMode ?? 'push');
+    }
+  }, [activeRepoId, files, setCurrentFileContext, setUrlForSelection]);
+
+  useEffect(() => {
+    if (!activeRepoId) return;
+    const onPopState = () => {
+      const parsed = parseWithMdLocationPath(window.location.pathname);
+      if (!parsed || parsed.repoId !== activeRepoId || !parsed.filePath) return;
+      if (currentFile?.path === parsed.filePath) return;
+      void selectFileByPath(parsed.filePath, { updateUrl: false });
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, [activeRepoId, currentFile?.path, selectFileByPath]);
 
   useEffect(() => {
     if (!currentFile || userMode !== 'document') return;
@@ -325,8 +546,9 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     } catch (err) {
       setStatusMessage(err instanceof Error ? err.message : 'Push failed.');
     }
+    await reloadFiles();
     await reloadActivity();
-  }, [activeRepoId, reloadActivity]);
+  }, [activeRepoId, reloadActivity, reloadFiles]);
 
   const onResync = useCallback(async () => {
     if (!activeRepoId) return;
@@ -337,6 +559,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     if (!repo || !repo.githubInstallationId || !repo.githubRepoId || !repo.defaultBranch) {
       // Fallback to old Convex resync
       await api.resync(activeRepoId);
+      await reloadFiles();
       setStatusMessage('Re-sync complete.');
       await reloadActivity();
       return;
@@ -362,8 +585,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       setStatusMessage(`Re-synced ${data.filesCount} file(s) from GitHub.`);
 
       // Reload files
-      const loadedFiles = await api.listFilesByRepo(activeRepoId);
-      setFiles(loadedFiles);
+      const loadedFiles = await reloadFiles();
       if (currentFile) {
         const refreshed = loadedFiles.find((f) => f.mdFileId === currentFile.mdFileId);
         if (refreshed) {
@@ -376,7 +598,211 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       setStatusMessage(err instanceof Error ? err.message : 'Re-sync failed.');
     }
     await reloadActivity();
-  }, [activeRepoId, repos, currentFile, reloadActivity]);
+  }, [activeRepoId, repos, currentFile, reloadActivity, reloadFiles]);
+
+  const openImportReviewFromFileList = useCallback(async (fileList: FileList) => {
+    const dropped = Array.from(fileList);
+    if (dropped.length === 0) {
+      setImportOverlayVisible(false);
+      return;
+    }
+
+    const rows: ImportRowState[] = [];
+    for (const file of dropped) {
+      const sourceName = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+      const normalizedPath = normalizePathInput(sourceName) ?? file.name;
+      if (!isMarkdownPath(normalizedPath)) continue;
+      rows.push({
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        sourceName,
+        relativePath: sourceName,
+        targetPath: normalizedPath,
+        conflictMode: 'keep_both',
+        hasExistingConflict: hasPathConflict(normalizedPath, files),
+        isValid: true,
+        content: await file.text(),
+      });
+    }
+
+    if (rows.length === 0) {
+      setImportOverlayVisible(false);
+      setStatusMessage('Only .md and .markdown files are supported for import.');
+      return;
+    }
+
+    setImportRows(rows.map((row) => normalizeImportRow(row, files)));
+    setImportReviewOpen(true);
+    setImportOverlayVisible(false);
+  }, [files]);
+
+  useEffect(() => {
+    let dragDepth = 0;
+    const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
+
+    const onDragEnter = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth += 1;
+      if (!importProcessing) {
+        setImportOverlayVisible(true);
+      }
+    };
+
+    const onDragOver = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const onDragLeave = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0 && !importProcessing) {
+        setImportOverlayVisible(false);
+      }
+    };
+
+    const onDrop = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      const droppedFiles = event.dataTransfer?.files;
+      if (!droppedFiles) return;
+      void openImportReviewFromFileList(droppedFiles);
+    };
+
+    window.addEventListener('dragenter', onDragEnter);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [importProcessing, openImportReviewFromFileList]);
+
+  const onUpdateImportRow = useCallback((id: string, patch: Partial<Pick<ImportReviewRow, 'targetPath' | 'conflictMode'>>) => {
+    setImportRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const nextRow: ImportRowState = {
+          ...row,
+          targetPath: patch.targetPath ?? row.targetPath,
+          conflictMode: (patch.conflictMode ?? row.conflictMode) as ImportConflictMode,
+        };
+        return normalizeImportRow(nextRow, files);
+      }),
+    );
+  }, [files]);
+
+  const onSubmitImportReview = useCallback(async () => {
+    if (!activeRepoId) return;
+    const validRows = importRows.filter((row) => row.isValid);
+    if (validRows.length === 0) {
+      setStatusMessage('No valid markdown files to import.');
+      return;
+    }
+
+    setImportProcessing(true);
+    setImportOverlayVisible(true);
+    try {
+      const result = await api.importLocalBatch(
+        activeRepoId,
+        validRows.map((row) => ({
+          relativePath: row.relativePath,
+          targetPath: row.targetPath,
+          content: row.content,
+          conflictMode: row.conflictMode,
+        })),
+      );
+
+      const loadedFiles = await reloadFiles();
+      if (result.firstPath) {
+        const nextFile = loadedFiles.find((file) => file.path === result.firstPath);
+        if (nextFile) {
+          setCurrentFileContext(nextFile);
+          const loadedComments = await api.listCommentsByFile(nextFile.mdFileId);
+          setComments(loadedComments);
+        }
+        setUrlForSelection(activeRepoId, result.firstPath, 'push');
+      }
+      await reloadActivity();
+
+      setStatusMessage(
+        `Imported ${result.imported} new, ${result.updated} replaced, ${result.autoRenamed} keep-both, ${result.unchanged} unchanged, ${result.invalid} invalid.`,
+      );
+      setImportReviewOpen(false);
+      setImportRows([]);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Import failed.');
+    } finally {
+      setImportProcessing(false);
+      setImportOverlayVisible(false);
+    }
+  }, [activeRepoId, importRows, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
+
+  const onMovePath = useCallback(async (input: { fromPath: string; toDirectoryPath: string; isDirectory: boolean }) => {
+    if (!activeRepoId) return;
+    const result = await api.movePath(activeRepoId, input.fromPath, input.toDirectoryPath, 'keep_both');
+    if (!result.ok) {
+      setStatusMessage(result.reason ?? 'Move failed.');
+      return;
+    }
+
+    const loadedFiles = await reloadFiles();
+    if (currentFile && result.moved) {
+      const movedCurrent = result.moved.find((entry) => entry.mdFileId === currentFile.mdFileId);
+      if (movedCurrent) {
+        const refreshed = loadedFiles.find((file) => file.mdFileId === currentFile.mdFileId);
+        if (refreshed) {
+          setCurrentFileContext(refreshed);
+          const loadedComments = await api.listCommentsByFile(refreshed.mdFileId);
+          setComments(loadedComments);
+          setUrlForSelection(activeRepoId, refreshed.path, 'replace');
+        }
+      } else {
+        const remapped = remapPathAfterRewrite(currentFile.path, input.fromPath, result.toPath ?? input.toDirectoryPath);
+        if (remapped) {
+          setUrlForSelection(activeRepoId, remapped, 'replace');
+        }
+      }
+    }
+
+    await reloadActivity();
+    setStatusMessage(`Moved ${result.movedCount ?? 0} path(s).`);
+  }, [activeRepoId, currentFile, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
+
+  const onRenamePath = useCallback(async (input: { fromPath: string; toPath: string; isDirectory: boolean }) => {
+    if (!activeRepoId) return;
+    const result = await api.renamePath(activeRepoId, input.fromPath, input.toPath, 'keep_both');
+    if (!result.ok) {
+      setStatusMessage(result.reason ?? 'Rename failed.');
+      return;
+    }
+
+    const loadedFiles = await reloadFiles();
+    if (currentFile && result.moved) {
+      const movedCurrent = result.moved.find((entry) => entry.mdFileId === currentFile.mdFileId);
+      if (movedCurrent) {
+        const refreshed = loadedFiles.find((file) => file.mdFileId === currentFile.mdFileId);
+        if (refreshed) {
+          setCurrentFileContext(refreshed);
+          const loadedComments = await api.listCommentsByFile(refreshed.mdFileId);
+          setComments(loadedComments);
+          setUrlForSelection(activeRepoId, refreshed.path, 'replace');
+        }
+      }
+    }
+
+    await reloadActivity();
+    setStatusMessage(`Renamed ${result.renamedCount ?? result.movedCount ?? 0} path(s).`);
+  }, [activeRepoId, currentFile, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
 
   const onToggleFiles = useCallback(() => {
     setFilesOpen((prev) => {
@@ -410,10 +836,21 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   return (
     <main className="withmd-bg withmd-page withmd-stage">
       <div className={`withmd-stage-layout ${filesOpen ? 'files-open' : ''} ${commentsOpen ? 'comments-open' : ''}`}>
-        <aside className={`withmd-side withmd-side-left ${filesOpen ? 'is-open' : ''}`}>
+        <aside ref={filesPanelRef} className={`withmd-side withmd-side-left ${filesOpen ? 'is-open' : ''}`}>
           <div className="withmd-drawer withmd-drawer-left">
             <div className="withmd-drawer-inner">
-              <FileTree repoId={activeRepoId || currentFile.repoId} files={files} activePath={currentFile.path} />
+              <FileTree
+                repoId={activeRepoId || currentFile.repoId}
+                files={files}
+                activePath={currentFile.path}
+                pendingPaths={pendingGitHubPaths}
+                onSelectPath={(path) => {
+                  if (path === currentFile.path) return;
+                  void selectFileByPath(path, { updateUrl: true, historyMode: 'push' });
+                }}
+                onMovePath={onMovePath}
+                onRenamePath={onRenamePath}
+              />
             </div>
           </div>
           <button
@@ -456,6 +893,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
             <div className="withmd-doc-stage">
               <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill">
                 <DocumentSurface
+                  key={currentFile.mdFileId}
                   mdFileId={currentFile.mdFileId}
                   contentHash={currentFile.contentHash}
                   realtimeEnabled={realtimeEnabled}
@@ -467,8 +905,16 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   focusedComment={activeComment}
                   focusRequestId={focusRequestId}
                   sourceValue={sourceValue}
-                  onSourceChange={setSourceValue}
+                  onSourceChange={(next) => {
+                    setSourceValue(next);
+                    if (currentFile) {
+                      setLocalPathDirty(currentFile.path, hasMeaningfulDiff(next, savedContent));
+                    }
+                  }}
                   onEditorContentChange={(next) => {
+                    if (currentFile) {
+                      setLocalPathDirty(currentFile.path, hasMeaningfulDiff(next, savedContent));
+                    }
                     setCurrentFile((prev) => (prev ? { ...prev, content: next } : prev));
                     setSourceValue(next);
                   }}
@@ -539,6 +985,24 @@ export default function WithMdShell({ repoId, filePath }: Props) {
           </div>
         </aside>
       </div>
+
+      <ImportDropOverlay
+        visible={importOverlayVisible || importProcessing}
+        processing={importProcessing}
+        fileCount={importRows.length}
+      />
+      <ImportReviewSheet
+        open={importReviewOpen}
+        rows={importRows}
+        busy={importProcessing}
+        onUpdateRow={onUpdateImportRow}
+        onCancel={() => {
+          if (importProcessing) return;
+          setImportReviewOpen(false);
+          setImportRows([]);
+        }}
+        onSubmit={() => void onSubmitImportReview()}
+      />
     </main>
   );
 }

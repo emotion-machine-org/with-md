@@ -85,7 +85,11 @@ export async function POST(req: NextRequest) {
 
     // Mark files not in tree as deleted
     const existingPaths = tree.files.map((f) => f.path);
-    await mutateConvex(F.mutations.mdFilesMarkMissingAsDeleted, {
+    const missingResult = await mutateConvex<{
+      deletedCount?: number;
+      preservedQueuedCount?: number;
+      preservedLocalOnlyCount?: number;
+    }>(F.mutations.mdFilesMarkMissingAsDeleted, {
       repoId: repoId as never,
       existingPaths,
     });
@@ -102,10 +106,21 @@ export async function POST(req: NextRequest) {
       repoId: repoId as never,
       actorId: session.githubLogin,
       type: 'sync_completed',
-      summary: `Synced ${filesCount} .md files from ${body.owner}/${body.repo}`,
+      summary: [
+        `Synced ${filesCount} .md files from ${body.owner}/${body.repo}`,
+        `(deleted ${missingResult.deletedCount ?? 0},`,
+        `kept local ${missingResult.preservedQueuedCount ?? 0} queued + ${missingResult.preservedLocalOnlyCount ?? 0} local-only).`,
+      ].join(' '),
     });
 
-    return NextResponse.json({ repoId, filesCount, commitSha: tree.commitSha });
+    return NextResponse.json({
+      repoId,
+      filesCount,
+      commitSha: tree.commitSha,
+      deletedCount: missingResult.deletedCount ?? 0,
+      preservedQueuedCount: missingResult.preservedQueuedCount ?? 0,
+      preservedLocalOnlyCount: missingResult.preservedLocalOnlyCount ?? 0,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

@@ -112,3 +112,53 @@ export interface CommentSelectionDraft {
     height: number;
   };
 }
+
+export type ImportConflictMode = 'keep_both' | 'replace';
+
+export interface LocalImportFileInput {
+  relativePath: string;
+  targetPath?: string;
+  content: string;
+  conflictMode?: ImportConflictMode;
+}
+
+export interface LocalImportResult {
+  ok: boolean;
+  imported: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+  invalid: number;
+  autoRenamed: number;
+  undoUnsupportedCount: number;
+  createdOrUpdatedPaths: string[];
+  invalidRows: string[];
+  firstPath: string | null;
+  undoPayload: string | null;
+  undoExpiresAt: number | null;
+}
+
+export interface PathRewriteEntry {
+  mdFileId: string;
+  fromPath: string;
+  toPath: string;
+}
+
+export interface PathRewriteResult {
+  ok: boolean;
+  reason?: string;
+  movedCount?: number;
+  renamedCount?: number;
+  fromPath?: string;
+  toPath?: string;
+  moved?: PathRewriteEntry[];
+  undoPayload?: string | null;
+  undoExpiresAt?: number | null;
+}
+
+export interface UndoFileOperationResult {
+  ok: boolean;
+  reason?: string;
+  restored?: number;
+  skipped?: number;
+}

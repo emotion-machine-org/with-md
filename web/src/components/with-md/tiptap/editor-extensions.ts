@@ -30,9 +30,11 @@ export function buildEditorExtensions(params: {
     ];
   }
 
-  // Realtime profile keeps table node schema parity with server-side markdown parsing.
+  // Keep Markdown extension enabled in realtime too, so editor updates can still
+  // serialize to markdown (`getMarkdown`) for dirty-state and source sync logic.
   return [
     ...baseCore,
+    Markdown,
     Collaboration.configure({ document: params.ydoc }),
   ];
 }

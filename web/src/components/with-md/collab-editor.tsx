@@ -38,11 +38,36 @@ interface Props {
 }
 
 function getEditorMarkdown(editor: unknown): string | null {
-  const fromMethod = (editor as { getMarkdown?: () => string }).getMarkdown?.();
-  if (typeof fromMethod === 'string') return fromMethod;
+  try {
+    const fromMethod = (editor as { getMarkdown?: () => string }).getMarkdown?.();
+    if (typeof fromMethod === 'string') return fromMethod;
+  } catch {
+    // fall through to manager-backed serializer
+  }
 
-  const fromStorage = (editor as { storage?: { markdown?: { getMarkdown?: () => string } } }).storage?.markdown?.getMarkdown?.();
-  if (typeof fromStorage === 'string') return fromStorage;
+  try {
+    const fromEditorManager = (
+      editor as { markdown?: { serialize?: (doc: unknown) => string }; getJSON?: () => unknown }
+    ).markdown;
+    const fromEditorManagerSerialized = fromEditorManager?.serialize?.(
+      (editor as { getJSON?: () => unknown }).getJSON?.(),
+    );
+    if (typeof fromEditorManagerSerialized === 'string') return fromEditorManagerSerialized;
+  } catch {
+    // fall through to storage-backed serializer
+  }
+
+  try {
+    const fromStorageManager = (
+      editor as { storage?: { markdown?: { manager?: { serialize?: (doc: unknown) => string } } }; getJSON?: () => unknown }
+    ).storage?.markdown?.manager;
+    const fromStorageSerialized = fromStorageManager?.serialize?.(
+      (editor as { getJSON?: () => unknown }).getJSON?.(),
+    );
+    if (typeof fromStorageSerialized === 'string') return fromStorageSerialized;
+  } catch {
+    // no markdown serializer available
+  }
 
   return null;
 }

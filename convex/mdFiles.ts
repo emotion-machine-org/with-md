@@ -1,3 +1,5 @@
+import type { Id } from './_generated/dataModel';
+import type { MutationCtx } from './_generated/server';
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
@@ -9,6 +11,37 @@ const REPEAT_DEDUPE_MIN_BYTES = 1024;
 const HEADING_REPEAT_DEDUPE_MIN_BYTES = 2048;
 const HEADING_REPEAT_MIN_SECTION_BYTES = 800;
 const HEADING_REPEAT_MIN_DUPLICATED_BYTES = 512;
+const UNDO_WINDOW_MS = 60_000;
+const UNDO_MAX_RESTORABLE_CONTENT_BYTES = 256 * 1024;
+
+type ConflictMode = 'keep_both' | 'replace';
+
+interface ImportUndoInsertedEntry {
+  kind: 'inserted';
+  mdFileId: string;
+}
+
+interface ImportUndoReplacedEntry {
+  kind: 'replaced';
+  mdFileId: string;
+  previousContent: string;
+}
+
+interface PathUndoEntry {
+  kind: 'path';
+  mdFileId: string;
+  fromPath: string;
+  toPath: string;
+}
+
+type UndoEntry = ImportUndoInsertedEntry | ImportUndoReplacedEntry | PathUndoEntry;
+
+interface UndoPayload {
+  repoId: string;
+  createdAt: number;
+  expiresAt: number;
+  entries: UndoEntry[];
+}
 
 const CLAW_MESSENGER_CANONICAL_README = `# @emotion-machine/claw-messenger
 
@@ -176,6 +209,287 @@ function sanitizeRealtimeMarkdown(content: string): { content: string; repeats: 
   };
 }
 
+function normalizeSlashes(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+}
+
+function normalizePath(path: string): string | null {
+  const normalized = normalizeSlashes(path).trim().replace(/^\/+|\/+$/g, '');
+  if (!normalized) return null;
+
+  const segments = normalized.split('/');
+  const cleaned: string[] = [];
+  for (const segment of segments) {
+    const part = segment.trim();
+    if (!part || part === '.') continue;
+    if (part === '..') return null;
+    cleaned.push(part);
+  }
+
+  if (cleaned.length === 0) return null;
+  return cleaned.join('/');
+}
+
+function joinPath(parent: string, child: string): string {
+  const parentNormalized = parent.trim().replace(/^\/+|\/+$/g, '');
+  const childNormalized = child.trim().replace(/^\/+|\/+$/g, '');
+  if (!parentNormalized) return childNormalized;
+  if (!childNormalized) return parentNormalized;
+  return `${parentNormalized}/${childNormalized}`;
+}
+
+function splitFileName(path: string): { dir: string; baseName: string; extension: string } {
+  const segments = path.split('/');
+  const fileName = segments.pop() ?? path;
+  const dir = segments.join('/');
+  const dot = fileName.lastIndexOf('.');
+  if (dot <= 0) {
+    return { dir, baseName: fileName, extension: '' };
+  }
+  return {
+    dir,
+    baseName: fileName.slice(0, dot),
+    extension: fileName.slice(dot),
+  };
+}
+
+function fileNameFromPath(path: string): string {
+  const segments = path.split('/');
+  return segments[segments.length - 1] ?? path;
+}
+
+function directoryFromPath(path: string): string {
+  const segments = path.split('/');
+  segments.pop();
+  return segments.join('/');
+}
+
+function isPathEqualOrDescendant(parentPath: string, candidatePath: string): boolean {
+  return candidatePath === parentPath || candidatePath.startsWith(`${parentPath}/`);
+}
+
+function isMarkdownFilePath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return lower.endsWith('.md') || lower.endsWith('.markdown');
+}
+
+function categorizeFile(path: string): string {
+  const lower = path.toLowerCase();
+  const name = lower.split('/').pop() ?? '';
+  if (name === 'readme.md' || name === 'readme.markdown') return 'readme';
+  if (name.includes('prompt')) return 'prompt';
+  if (name.includes('agent')) return 'agent';
+  if (name.includes('claude') || name.includes('.cursorrules')) return 'claude';
+  if (lower.startsWith('docs/') || lower.startsWith('doc/')) return 'docs';
+  return 'other';
+}
+
+function createSiblingPath(path: string, usedPaths: Set<string>): string {
+  const { dir, baseName, extension } = splitFileName(path);
+  let index = 2;
+  while (index < 1000) {
+    const candidateName = `${baseName} (${index})${extension}`;
+    const candidate = joinPath(dir, candidateName);
+    if (!usedPaths.has(candidate)) {
+      return candidate;
+    }
+    index += 1;
+  }
+  return joinPath(dir, `${baseName} (${Date.now()})${extension}`);
+}
+
+function buildUndoPayload(repoId: string, entries: UndoEntry[], now: number): string | null {
+  if (entries.length === 0) return null;
+  const payload: UndoPayload = {
+    repoId,
+    createdAt: now,
+    expiresAt: now + UNDO_WINDOW_MS,
+    entries,
+  };
+  return JSON.stringify(payload);
+}
+
+function parseUndoPayload(raw: string): UndoPayload | null {
+  try {
+    const parsed = JSON.parse(raw) as Partial<UndoPayload> | null;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (typeof parsed.repoId !== 'string') return null;
+    if (!Number.isFinite(parsed.createdAt) || !Number.isFinite(parsed.expiresAt)) return null;
+    if (!Array.isArray(parsed.entries)) return null;
+    const entries: UndoEntry[] = [];
+    for (const item of parsed.entries) {
+      if (!item || typeof item !== 'object') continue;
+      const entry = item as Partial<UndoEntry>;
+      if (entry.kind === 'inserted' && typeof entry.mdFileId === 'string') {
+        entries.push({ kind: 'inserted', mdFileId: entry.mdFileId });
+        continue;
+      }
+      if (
+        entry.kind === 'replaced'
+        && typeof entry.mdFileId === 'string'
+        && typeof (entry as Partial<ImportUndoReplacedEntry>).previousContent === 'string'
+      ) {
+        entries.push({
+          kind: 'replaced',
+          mdFileId: entry.mdFileId,
+          previousContent: (entry as Partial<ImportUndoReplacedEntry>).previousContent ?? '',
+        });
+        continue;
+      }
+      if (
+        entry.kind === 'path'
+        && typeof entry.mdFileId === 'string'
+        && typeof (entry as Partial<PathUndoEntry>).fromPath === 'string'
+        && typeof (entry as Partial<PathUndoEntry>).toPath === 'string'
+      ) {
+        entries.push({
+          kind: 'path',
+          mdFileId: entry.mdFileId,
+          fromPath: (entry as Partial<PathUndoEntry>).fromPath ?? '',
+          toPath: (entry as Partial<PathUndoEntry>).toPath ?? '',
+        });
+      }
+    }
+    return {
+      repoId: parsed.repoId,
+      createdAt: Number(parsed.createdAt),
+      expiresAt: Number(parsed.expiresAt),
+      entries,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function upsertPendingPushQueueItem(
+  ctx: MutationCtx,
+  input: {
+    repoId: Id<'repos'>;
+    mdFileId: Id<'mdFiles'>;
+    path: string;
+    newContent: string;
+    createdAt: number;
+  },
+) {
+  const queued = await ctx.db
+    .query('pushQueue')
+    .withIndex('by_md_file', (q) => q.eq('mdFileId', input.mdFileId))
+    .collect();
+  const pending = queued.filter((item) => item.status === 'queued');
+  if (pending.length > 0) {
+    for (const item of pending) {
+      await ctx.db.patch(item._id, {
+        path: input.path,
+        newContent: input.newContent,
+        createdAt: input.createdAt,
+      });
+    }
+    return;
+  }
+
+  await ctx.db.insert('pushQueue', {
+    repoId: input.repoId,
+    mdFileId: input.mdFileId,
+    path: input.path,
+    newContent: input.newContent,
+    authorLogins: [],
+    authorEmails: [],
+    status: 'queued',
+    createdAt: input.createdAt,
+  });
+}
+
+async function patchPendingQueuePath(
+  ctx: MutationCtx,
+  mdFileId: Id<'mdFiles'>,
+  nextPath: string,
+) {
+  const queued = await ctx.db
+    .query('pushQueue')
+    .withIndex('by_md_file', (q) => q.eq('mdFileId', mdFileId))
+    .collect();
+  for (const item of queued) {
+    if (item.status !== 'queued') continue;
+    await ctx.db.patch(item._id, { path: nextPath });
+  }
+}
+
+interface PathRewriteEntry {
+  mdFileId: Id<'mdFiles'>;
+  fromPath: string;
+  toPath: string;
+}
+
+function buildPathRewritePlan(
+  repoFiles: Array<{
+    _id: Id<'mdFiles'>;
+    path: string;
+    isDeleted: boolean;
+  }>,
+  fromPath: string,
+  rootToPath: string,
+  conflictMode: ConflictMode,
+): { ok: true; entries: PathRewriteEntry[]; isDirectory: boolean } | { ok: false; reason: string } {
+  const active = repoFiles.filter((file) => !file.isDeleted);
+  const sourceFile = active.find((file) => file.path === fromPath) ?? null;
+  const descendants = active.filter((file) => file.path.startsWith(`${fromPath}/`));
+  const isDirectory = !sourceFile && descendants.length > 0;
+  const moveFiles = isDirectory ? descendants : (sourceFile ? [sourceFile] : []);
+  if (moveFiles.length === 0) {
+    return { ok: false, reason: 'Path not found.' };
+  }
+
+  if (isDirectory && isPathEqualOrDescendant(fromPath, rootToPath)) {
+    return { ok: false, reason: 'Cannot move a folder inside itself.' };
+  }
+  if (!isDirectory && sourceFile && sourceFile.path === rootToPath) {
+    return { ok: false, reason: 'Path unchanged.' };
+  }
+  if (isDirectory && fromPath === rootToPath) {
+    return { ok: false, reason: 'Path unchanged.' };
+  }
+
+  const movingPathSet = new Set(moveFiles.map((file) => file.path));
+  const occupiedPaths = new Set(active.map((file) => file.path));
+  for (const path of movingPathSet) {
+    occupiedPaths.delete(path);
+  }
+
+  const entries: PathRewriteEntry[] = [];
+  if (!isDirectory && sourceFile) {
+    let nextPath = rootToPath;
+    if (occupiedPaths.has(nextPath)) {
+      if (conflictMode === 'keep_both') {
+        nextPath = createSiblingPath(nextPath, occupiedPaths);
+      } else {
+        return { ok: false, reason: `Destination already exists: ${nextPath}` };
+      }
+    }
+    entries.push({
+      mdFileId: sourceFile._id,
+      fromPath: sourceFile.path,
+      toPath: nextPath,
+    });
+    return { ok: true, entries, isDirectory: false };
+  }
+
+  // Folder move/rename: explicit collision handling; no implicit merge.
+  for (const file of moveFiles) {
+    const suffix = file.path.slice(fromPath.length).replace(/^\//, '');
+    const nextPath = suffix ? joinPath(rootToPath, suffix) : rootToPath;
+    if (occupiedPaths.has(nextPath)) {
+      return { ok: false, reason: `Destination already exists: ${nextPath}` };
+    }
+    entries.push({
+      mdFileId: file._id,
+      fromPath: file.path,
+      toPath: nextPath,
+    });
+  }
+
+  return { ok: true, entries, isDirectory: true };
+}
+
 export const listByRepo = query({
   args: {
     repoId: v.id('repos'),
@@ -292,10 +606,20 @@ export const upsertFromSync = mutation({
     const now = Date.now();
 
     if (existing) {
-      // If SHA didn't change and file is healthy, skip.
-      // If local content diverged/corrupted while SHA stayed the same, force refresh from GitHub.
       const localDriftedFromGithub = hasMeaningfulDiff(existing.content, args.content);
+      // Git-like safety: never overwrite local pending edits during sync.
+      const queuedForThisFile = await ctx.db
+        .query('pushQueue')
+        .withIndex('by_md_file', (q) => q.eq('mdFileId', existing._id))
+        .collect();
+      const hasPendingLocalChanges = queuedForThisFile.some((item) => item.status === 'queued');
+
+      // If SHA didn't change and file is healthy, skip.
       if (existing.lastGithubSha === args.githubSha && !existing.isDeleted && !localDriftedFromGithub) {
+        return existing._id;
+      }
+
+      if (hasPendingLocalChanges && localDriftedFromGithub) {
         return existing._id;
       }
 
@@ -345,15 +669,40 @@ export const markMissingAsDeleted = mutation({
       .query('mdFiles')
       .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
       .collect();
+    const queuedItems = await ctx.db
+      .query('pushQueue')
+      .withIndex('by_repo_and_status', (q) => q.eq('repoId', args.repoId).eq('status', 'queued'))
+      .collect();
 
     const pathSet = new Set(args.existingPaths);
+    const queuedFileIds = new Set(queuedItems.map((item) => item.mdFileId));
     const now = Date.now();
+    let deletedCount = 0;
+    let preservedQueuedCount = 0;
+    let preservedLocalOnlyCount = 0;
 
     for (const file of allFiles) {
-      if (!file.isDeleted && !pathSet.has(file.path)) {
-        await ctx.db.patch(file._id, { isDeleted: true, deletedAt: now });
+      if (file.isDeleted || pathSet.has(file.path)) continue;
+
+      if (queuedFileIds.has(file._id)) {
+        preservedQueuedCount += 1;
+        continue;
       }
+
+      if (file.lastGithubSha.startsWith('local_')) {
+        preservedLocalOnlyCount += 1;
+        continue;
+      }
+
+      await ctx.db.patch(file._id, { isDeleted: true, deletedAt: now });
+      deletedCount += 1;
     }
+
+    return {
+      deletedCount,
+      preservedQueuedCount,
+      preservedLocalOnlyCount,
+    };
   },
 });
 
@@ -410,6 +759,539 @@ export const saveSource = mutation({
     });
 
     return { changed: true };
+  },
+});
+
+export const importLocalBatch = mutation({
+  args: {
+    repoId: v.id('repos'),
+    files: v.array(v.object({
+      relativePath: v.string(),
+      targetPath: v.optional(v.string()),
+      content: v.string(),
+      conflictMode: v.optional(v.union(v.literal('keep_both'), v.literal('replace'))),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.repoId);
+    if (!repo) {
+      throw new Error('Repo not found');
+    }
+
+    const repoFiles = await ctx.db
+      .query('mdFiles')
+      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+      .collect();
+
+    const now = Date.now();
+    const activeByPath = new Map<string, (typeof repoFiles)[number]>();
+    const deletedByPath = new Map<string, (typeof repoFiles)[number]>();
+    for (const file of repoFiles) {
+      if (file.isDeleted) {
+        if (!deletedByPath.has(file.path)) {
+          deletedByPath.set(file.path, file);
+        }
+        continue;
+      }
+      if (!activeByPath.has(file.path)) {
+        activeByPath.set(file.path, file);
+      }
+    }
+    const activePaths = new Set(activeByPath.keys());
+    const undoEntries: UndoEntry[] = [];
+    const createdOrUpdatedPaths: string[] = [];
+    const invalidRows: string[] = [];
+
+    let imported = 0;
+    let updated = 0;
+    let unchanged = 0;
+    let skipped = 0;
+    let invalid = 0;
+    let autoRenamed = 0;
+    let undoUnsupportedCount = 0;
+
+    for (const row of args.files) {
+      const requestedTarget = normalizePath(row.targetPath ?? row.relativePath);
+      if (!requestedTarget || !isMarkdownFilePath(requestedTarget)) {
+        invalid += 1;
+        invalidRows.push(row.relativePath);
+        continue;
+      }
+
+      const conflictMode: ConflictMode = row.conflictMode === 'replace' ? 'replace' : 'keep_both';
+      let targetPath = requestedTarget;
+      if (activePaths.has(targetPath) && conflictMode === 'keep_both') {
+        targetPath = createSiblingPath(targetPath, activePaths);
+        autoRenamed += 1;
+      }
+
+      const existingActive = activeByPath.get(targetPath) ?? null;
+      const sourceContent = row.content.replace(/\r\n/g, '\n');
+      const sourceHash = hashContent(sourceContent);
+      const syntax = detectUnsupportedSyntax(sourceContent);
+      const fileCategory = categorizeFile(targetPath);
+      const sourceBytes = markdownByteLength(sourceContent);
+
+      if (existingActive) {
+        if (!hasMeaningfulDiff(sourceContent, existingActive.content)) {
+          unchanged += 1;
+          continue;
+        }
+
+        if (markdownByteLength(existingActive.content) <= UNDO_MAX_RESTORABLE_CONTENT_BYTES) {
+          undoEntries.push({
+            kind: 'replaced',
+            mdFileId: existingActive._id,
+            previousContent: existingActive.content,
+          });
+        } else {
+          undoUnsupportedCount += 1;
+        }
+
+        await ctx.db.patch(existingActive._id, {
+          content: sourceContent,
+          contentHash: sourceHash,
+          fileCategory,
+          sizeBytes: sourceBytes,
+          isDeleted: false,
+          deletedAt: undefined,
+          lastSyncedAt: now,
+          editHeartbeat: now,
+          yjsStateStorageId: undefined,
+          pendingGithubContent: sourceContent,
+          pendingGithubSha: sourceHash,
+          syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+          syntaxSupportReasons: syntax.reasons,
+          isOversized: false,
+          lastOversizeBytes: undefined,
+          oversizeUpdatedAt: undefined,
+        });
+
+        await upsertPendingPushQueueItem(ctx, {
+          repoId: args.repoId,
+          mdFileId: existingActive._id,
+          path: targetPath,
+          newContent: sourceContent,
+          createdAt: now,
+        });
+
+        updated += 1;
+        createdOrUpdatedPaths.push(targetPath);
+        activePaths.add(targetPath);
+        activeByPath.set(targetPath, {
+          ...existingActive,
+          content: sourceContent,
+          contentHash: sourceHash,
+          fileCategory,
+          sizeBytes: sourceBytes,
+          isDeleted: false,
+        });
+        continue;
+      }
+
+      const existingDeleted = deletedByPath.get(targetPath) ?? null;
+      if (existingDeleted) {
+        await ctx.db.patch(existingDeleted._id, {
+          content: sourceContent,
+          contentHash: sourceHash,
+          fileCategory,
+          sizeBytes: sourceBytes,
+          isDeleted: false,
+          deletedAt: undefined,
+          lastSyncedAt: now,
+          editHeartbeat: now,
+          yjsStateStorageId: undefined,
+          pendingGithubContent: sourceContent,
+          pendingGithubSha: sourceHash,
+          syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+          syntaxSupportReasons: syntax.reasons,
+          isOversized: false,
+          lastOversizeBytes: undefined,
+          oversizeUpdatedAt: undefined,
+          lastGithubSha: existingDeleted.lastGithubSha || `local_${sourceHash}`,
+        });
+
+        await upsertPendingPushQueueItem(ctx, {
+          repoId: args.repoId,
+          mdFileId: existingDeleted._id,
+          path: targetPath,
+          newContent: sourceContent,
+          createdAt: now,
+        });
+
+        undoEntries.push({
+          kind: 'inserted',
+          mdFileId: existingDeleted._id,
+        });
+
+        imported += 1;
+        createdOrUpdatedPaths.push(targetPath);
+        activePaths.add(targetPath);
+        activeByPath.set(targetPath, {
+          ...existingDeleted,
+          path: targetPath,
+          content: sourceContent,
+          contentHash: sourceHash,
+          fileCategory,
+          sizeBytes: sourceBytes,
+          isDeleted: false,
+        });
+        deletedByPath.delete(targetPath);
+        continue;
+      }
+
+      const mdFileId = await ctx.db.insert('mdFiles', {
+        repoId: args.repoId,
+        path: targetPath,
+        content: sourceContent,
+        contentHash: sourceHash,
+        lastGithubSha: `local_${sourceHash}`,
+        fileCategory,
+        sizeBytes: sourceBytes,
+        isDeleted: false,
+        lastSyncedAt: now,
+        editHeartbeat: now,
+        pendingGithubContent: sourceContent,
+        pendingGithubSha: sourceHash,
+        syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+        syntaxSupportReasons: syntax.reasons,
+        isOversized: false,
+      });
+
+      await upsertPendingPushQueueItem(ctx, {
+        repoId: args.repoId,
+        mdFileId,
+        path: targetPath,
+        newContent: sourceContent,
+        createdAt: now,
+      });
+
+      undoEntries.push({
+        kind: 'inserted',
+        mdFileId,
+      });
+
+      imported += 1;
+      createdOrUpdatedPaths.push(targetPath);
+      activePaths.add(targetPath);
+      activeByPath.set(targetPath, {
+        _id: mdFileId,
+        _creationTime: now,
+        repoId: args.repoId,
+        path: targetPath,
+        content: sourceContent,
+        contentHash: sourceHash,
+        lastGithubSha: `local_${sourceHash}`,
+        fileCategory,
+        sizeBytes: sourceBytes,
+        isDeleted: false,
+        lastSyncedAt: now,
+      });
+    }
+
+    const changedCount = imported + updated;
+    if (changedCount > 0) {
+      const summary = [
+        `Imported local markdown files (${imported} new`,
+        `${updated} replaced`,
+        `${autoRenamed} keep-both`,
+        `${unchanged} unchanged`,
+        `${invalid} invalid).`,
+      ].join(', ');
+      await ctx.db.insert('activities', {
+        repoId: args.repoId,
+        actorId: 'local-user',
+        type: 'source_saved',
+        summary,
+        createdAt: now,
+      });
+    }
+
+    const undoPayload = buildUndoPayload(args.repoId, undoEntries, now);
+    return {
+      ok: true,
+      imported,
+      updated,
+      unchanged,
+      skipped,
+      invalid,
+      autoRenamed,
+      undoUnsupportedCount,
+      createdOrUpdatedPaths,
+      invalidRows,
+      firstPath: createdOrUpdatedPaths[0] ?? null,
+      undoPayload,
+      undoExpiresAt: undoPayload ? now + UNDO_WINDOW_MS : null,
+    };
+  },
+});
+
+export const movePath = mutation({
+  args: {
+    repoId: v.id('repos'),
+    fromPath: v.string(),
+    toDirectoryPath: v.optional(v.string()),
+    conflictMode: v.optional(v.union(v.literal('keep_both'), v.literal('replace'))),
+  },
+  handler: async (ctx, args) => {
+    const fromPath = normalizePath(args.fromPath);
+    if (!fromPath) {
+      return { ok: false, reason: 'Invalid source path.' as const };
+    }
+
+    const toDirectoryPath = args.toDirectoryPath ? normalizePath(args.toDirectoryPath) ?? '' : '';
+    const nextRoot = normalizePath(joinPath(toDirectoryPath, fileNameFromPath(fromPath)));
+    if (!nextRoot) {
+      return { ok: false, reason: 'Invalid destination path.' as const };
+    }
+
+    const repoFiles = await ctx.db
+      .query('mdFiles')
+      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+      .collect();
+
+    const conflictMode: ConflictMode = args.conflictMode === 'replace' ? 'replace' : 'keep_both';
+    const plan = buildPathRewritePlan(repoFiles, fromPath, nextRoot, conflictMode);
+    if (!plan.ok) {
+      return { ok: false, reason: plan.reason as const };
+    }
+
+    const now = Date.now();
+    const undoEntries: UndoEntry[] = [];
+    for (const entry of plan.entries) {
+      await ctx.db.patch(entry.mdFileId, {
+        path: entry.toPath,
+        editHeartbeat: now,
+      });
+      await patchPendingQueuePath(ctx, entry.mdFileId, entry.toPath);
+      undoEntries.push({
+        kind: 'path',
+        mdFileId: entry.mdFileId,
+        fromPath: entry.fromPath,
+        toPath: entry.toPath,
+      });
+    }
+
+    await ctx.db.insert('activities', {
+      repoId: args.repoId,
+      actorId: 'local-user',
+      type: 'source_saved',
+      summary: `Moved ${plan.isDirectory ? 'folder' : 'file'} ${fromPath} -> ${nextRoot} (${plan.entries.length} path${plan.entries.length === 1 ? '' : 's'})`,
+      filePath: fromPath,
+      createdAt: now,
+    });
+
+    const undoPayload = buildUndoPayload(args.repoId, undoEntries, now);
+    return {
+      ok: true,
+      movedCount: plan.entries.length,
+      fromPath,
+      toPath: nextRoot,
+      moved: plan.entries,
+      undoPayload,
+      undoExpiresAt: undoPayload ? now + UNDO_WINDOW_MS : null,
+    };
+  },
+});
+
+export const renamePath = mutation({
+  args: {
+    repoId: v.id('repos'),
+    fromPath: v.string(),
+    toPath: v.string(),
+    conflictMode: v.optional(v.union(v.literal('keep_both'), v.literal('replace'))),
+  },
+  handler: async (ctx, args) => {
+    const fromPath = normalizePath(args.fromPath);
+    const requestedToPath = normalizePath(args.toPath);
+    if (!fromPath || !requestedToPath) {
+      return { ok: false, reason: 'Invalid path.' as const };
+    }
+
+    const repoFiles = await ctx.db
+      .query('mdFiles')
+      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+      .collect();
+
+    const sourceFile = repoFiles.find((file) => !file.isDeleted && file.path === fromPath) ?? null;
+    if (sourceFile && !isMarkdownFilePath(requestedToPath)) {
+      return { ok: false, reason: 'Only markdown file names are allowed.' as const };
+    }
+
+    const conflictMode: ConflictMode = args.conflictMode === 'replace' ? 'replace' : 'keep_both';
+    const plan = buildPathRewritePlan(repoFiles, fromPath, requestedToPath, conflictMode);
+    if (!plan.ok) {
+      return { ok: false, reason: plan.reason as const };
+    }
+
+    const now = Date.now();
+    const undoEntries: UndoEntry[] = [];
+    for (const entry of plan.entries) {
+      await ctx.db.patch(entry.mdFileId, {
+        path: entry.toPath,
+        editHeartbeat: now,
+      });
+      await patchPendingQueuePath(ctx, entry.mdFileId, entry.toPath);
+      undoEntries.push({
+        kind: 'path',
+        mdFileId: entry.mdFileId,
+        fromPath: entry.fromPath,
+        toPath: entry.toPath,
+      });
+    }
+
+    await ctx.db.insert('activities', {
+      repoId: args.repoId,
+      actorId: 'local-user',
+      type: 'source_saved',
+      summary: `Renamed ${plan.isDirectory ? 'folder' : 'file'} ${fromPath} -> ${requestedToPath} (${plan.entries.length} path${plan.entries.length === 1 ? '' : 's'})`,
+      filePath: fromPath,
+      createdAt: now,
+    });
+
+    const undoPayload = buildUndoPayload(args.repoId, undoEntries, now);
+    return {
+      ok: true,
+      renamedCount: plan.entries.length,
+      fromPath,
+      toPath: requestedToPath,
+      moved: plan.entries,
+      undoPayload,
+      undoExpiresAt: undoPayload ? now + UNDO_WINDOW_MS : null,
+    };
+  },
+});
+
+export const undoFileOperation = mutation({
+  args: {
+    repoId: v.id('repos'),
+    undoPayload: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const parsed = parseUndoPayload(args.undoPayload);
+    if (!parsed) {
+      return { ok: false, reason: 'Invalid undo payload.' as const };
+    }
+    if (parsed.repoId !== args.repoId) {
+      return { ok: false, reason: 'Undo payload does not match repo.' as const };
+    }
+    if (Date.now() > parsed.expiresAt) {
+      return { ok: false, reason: 'Undo expired.' as const };
+    }
+
+    const now = Date.now();
+    let restored = 0;
+    let skipped = 0;
+
+    for (const entry of parsed.entries) {
+      if (entry.kind === 'inserted') {
+        const file = await ctx.db.get(entry.mdFileId as Id<'mdFiles'>);
+        if (!file || file.repoId !== args.repoId || file.isDeleted) {
+          skipped += 1;
+          continue;
+        }
+
+        await ctx.db.patch(file._id, {
+          isDeleted: true,
+          deletedAt: now,
+          yjsStateStorageId: undefined,
+        });
+
+        const queued = await ctx.db
+          .query('pushQueue')
+          .withIndex('by_md_file', (q) => q.eq('mdFileId', file._id))
+          .collect();
+        for (const item of queued) {
+          if (item.status !== 'queued') continue;
+          await ctx.db.patch(item._id, {
+            status: 'pushed',
+            pushedAt: now,
+            commitSha: 'local_undo',
+          });
+        }
+
+        restored += 1;
+        continue;
+      }
+
+      if (entry.kind === 'replaced') {
+        const file = await ctx.db.get(entry.mdFileId as Id<'mdFiles'>);
+        if (!file || file.repoId !== args.repoId || file.isDeleted) {
+          skipped += 1;
+          continue;
+        }
+        if (!hasMeaningfulDiff(entry.previousContent, file.content)) {
+          skipped += 1;
+          continue;
+        }
+
+        const syntax = detectUnsupportedSyntax(entry.previousContent);
+        const previousHash = hashContent(entry.previousContent);
+        await ctx.db.patch(file._id, {
+          content: entry.previousContent,
+          contentHash: previousHash,
+          editHeartbeat: now,
+          yjsStateStorageId: undefined,
+          pendingGithubContent: entry.previousContent,
+          pendingGithubSha: previousHash,
+          syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+          syntaxSupportReasons: syntax.reasons,
+          isOversized: false,
+          lastOversizeBytes: undefined,
+          oversizeUpdatedAt: undefined,
+        });
+
+        await upsertPendingPushQueueItem(ctx, {
+          repoId: args.repoId,
+          mdFileId: file._id,
+          path: file.path,
+          newContent: entry.previousContent,
+          createdAt: now,
+        });
+
+        restored += 1;
+        continue;
+      }
+
+      const file = await ctx.db.get(entry.mdFileId as Id<'mdFiles'>);
+      if (!file || file.repoId !== args.repoId || file.isDeleted) {
+        skipped += 1;
+        continue;
+      }
+      if (file.path !== entry.toPath) {
+        skipped += 1;
+        continue;
+      }
+      const occupied = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_path', (q) => q.eq('repoId', args.repoId).eq('path', entry.fromPath))
+        .first();
+      if (occupied && occupied._id !== file._id && !occupied.isDeleted) {
+        skipped += 1;
+        continue;
+      }
+
+      await ctx.db.patch(file._id, {
+        path: entry.fromPath,
+        editHeartbeat: now,
+      });
+      await patchPendingQueuePath(ctx, file._id, entry.fromPath);
+      restored += 1;
+    }
+
+    await ctx.db.insert('activities', {
+      repoId: args.repoId,
+      actorId: 'local-user',
+      type: 'source_saved',
+      summary: `Undo file operation restored ${restored} item(s), skipped ${skipped}.`,
+      createdAt: now,
+    });
+
+    return {
+      ok: true,
+      restored,
+      skipped,
+    };
   },
 });
 
