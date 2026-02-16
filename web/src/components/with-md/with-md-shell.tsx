@@ -32,6 +32,9 @@ interface ImportRowState extends ImportReviewRow {
 }
 
 const FILES_PANEL_STORAGE_KEY = 'withmd-files-panel-open';
+const SIDE_TOGGLE_MIN_WIDTH = 48;
+const SIDE_TOGGLE_MAX_WIDTH = 96;
+const SIDE_TOGGLE_INTENT_RANGE = 192;
 
 function readFilesPanelOpenPreference(): boolean {
   if (typeof window === 'undefined') return false;
@@ -109,6 +112,9 @@ function remapPathAfterRewrite(currentPath: string, fromPath: string, toPath: st
 export default function WithMdShell({ repoId, filePath }: Props) {
   const { user } = useAuth();
   const filesPanelRef = useRef<HTMLElement | null>(null);
+  const filesToggleRef = useRef<HTMLButtonElement | null>(null);
+  const commentsToggleRef = useRef<HTMLButtonElement | null>(null);
+  const toggleIntentRef = useRef({ left: 0, right: 0 });
   const fileSwitchRequestIdRef = useRef(0);
   const [repos, setRepos] = useState<RepoSummary[]>([]);
   const [activeRepoId, setActiveRepoId] = useState('');
@@ -282,6 +288,93 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     if (typeof window === 'undefined') return;
     window.sessionStorage.setItem(FILES_PANEL_STORAGE_KEY, filesOpen ? '1' : '0');
   }, [filesOpen]);
+
+  const applyToggleIntent = useCallback((leftRawIntent: number, rightRawIntent: number) => {
+    const clampedLeft = Math.max(0, Math.min(1, leftRawIntent));
+    const clampedRight = Math.max(0, Math.min(1, rightRawIntent));
+    const leftIntent = filesOpen ? 0 : clampedLeft;
+    const rightIntent = commentsOpen ? 0 : clampedRight;
+    const widthDelta = SIDE_TOGGLE_MAX_WIDTH - SIDE_TOGGLE_MIN_WIDTH;
+    const leftWidth = SIDE_TOGGLE_MIN_WIDTH + widthDelta * leftIntent;
+    const rightWidth = SIDE_TOGGLE_MIN_WIDTH + widthDelta * rightIntent;
+
+    const filesToggle = filesToggleRef.current;
+    if (filesToggle) {
+      filesToggle.style.setProperty('--withmd-toggle-width', `${leftWidth.toFixed(2)}px`);
+      filesToggle.style.setProperty('--withmd-toggle-intent', leftIntent.toFixed(3));
+    }
+
+    const commentsToggle = commentsToggleRef.current;
+    if (commentsToggle) {
+      commentsToggle.style.setProperty('--withmd-toggle-width', `${rightWidth.toFixed(2)}px`);
+      commentsToggle.style.setProperty('--withmd-toggle-intent', rightIntent.toFixed(3));
+    }
+  }, [commentsOpen, filesOpen]);
+
+  useEffect(() => {
+    const { left, right } = toggleIntentRef.current;
+    applyToggleIntent(left, right);
+  }, [applyToggleIntent]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hasFinePointer = window.matchMedia('(pointer: fine)').matches;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!hasFinePointer || prefersReducedMotion) {
+      toggleIntentRef.current = { left: 0, right: 0 };
+      applyToggleIntent(0, 0);
+      return;
+    }
+
+    let rafId = 0;
+
+    const toIntent = (distanceFromEdge: number): number => {
+      const clampedDistance = Math.max(0, Math.min(SIDE_TOGGLE_INTENT_RANGE, distanceFromEdge));
+      const linear = 1 - (clampedDistance / SIDE_TOGGLE_INTENT_RANGE);
+      return linear * linear;
+    };
+
+    const updateFromX = (x: number) => {
+      const viewportWidth = window.innerWidth;
+      if (viewportWidth <= 0) return;
+      const leftIntent = toIntent(x);
+      const rightIntent = toIntent(viewportWidth - x);
+      const previous = toggleIntentRef.current;
+      if (Math.abs(leftIntent - previous.left) < 0.005 && Math.abs(rightIntent - previous.right) < 0.005) return;
+      toggleIntentRef.current = { left: leftIntent, right: rightIntent };
+      applyToggleIntent(leftIntent, rightIntent);
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') return;
+      const x = event.clientX;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(() => {
+        updateFromX(x);
+      });
+    };
+
+    const resetIntent = () => {
+      toggleIntentRef.current = { left: 0, right: 0 };
+      applyToggleIntent(0, 0);
+    };
+
+    const onMouseOut = (event: MouseEvent) => {
+      if (event.relatedTarget) return;
+      resetIntent();
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('blur', resetIntent);
+    window.addEventListener('mouseout', onMouseOut);
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('blur', resetIntent);
+      window.removeEventListener('mouseout', onMouseOut);
+    };
+  }, [applyToggleIntent]);
 
   useEffect(() => {
     if (!filesOpen) return;
@@ -868,6 +961,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
             </div>
           </div>
           <button
+            ref={filesToggleRef}
             type="button"
             className={`withmd-side-toggle withmd-side-toggle-left ${filesOpen ? 'is-open' : ''}`}
             onClick={onToggleFiles}
@@ -970,6 +1064,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
         <aside className={`withmd-side withmd-side-right ${commentsOpen ? 'is-open' : ''}`}>
           <button
+            ref={commentsToggleRef}
             type="button"
             className={`withmd-side-toggle withmd-side-toggle-right ${commentsOpen ? 'is-open' : ''}`}
             onClick={onToggleComments}
