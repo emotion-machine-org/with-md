@@ -425,19 +425,6 @@ export default function FileTree({ repoId, files, activePath, pendingPaths, acti
 
   return (
     <aside className="withmd-drawer-section withmd-column withmd-fill withmd-pad-3">
-      {activeRepo && (
-        <button
-          type="button"
-          className="withmd-repo-switcher-btn"
-          onClick={onOpenRepoPicker}
-          title="Switch repository"
-        >
-          <span className="withmd-repo-switcher-label">
-            {activeRepo.owner}/{activeRepo.name}
-          </span>
-          <SwitchIcon />
-        </button>
-      )}
       <h2 className="withmd-sidebar-title">Files</h2>
       <div
         className={[
@@ -461,6 +448,24 @@ export default function FileTree({ repoId, files, activePath, pendingPaths, acti
       >
         {tree.map((node) => renderNode(node, 0))}
       </div>
+      {activeRepo && (
+        <div className="withmd-filetree-footer">
+          <button
+            type="button"
+            className="withmd-repo-switcher-btn"
+            onClick={onOpenRepoPicker}
+            title="Switch repository"
+          >
+            <span className="withmd-repo-switcher-meta">Repository</span>
+            <span className="withmd-repo-switcher-main">
+              <span className="withmd-repo-switcher-label">
+                {activeRepo.owner}/{activeRepo.name}
+              </span>
+              <SwitchIcon />
+            </span>
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
