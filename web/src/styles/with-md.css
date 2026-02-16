@@ -1123,7 +1123,7 @@
   align-items: stretch;
   gap: 7px;
   padding: 10px 12px 11px;
-  border: 1px solid color-mix(in srgb, var(--withmd-glass-border) 76%, transparent);
+  border: 0;
   background:
     linear-gradient(
       132deg,
@@ -1140,7 +1140,6 @@
 }
 
 .withmd-repo-switcher-btn:hover {
-  border-color: color-mix(in srgb, var(--withmd-border) 86%, transparent);
   background:
     linear-gradient(
       132deg,
@@ -1207,7 +1206,7 @@
 .withmd-repo-picker-panel {
   background: var(--withmd-panel);
   border: 1px solid var(--withmd-border);
-  padding: 32px;
+  padding: var(--withmd-repo-picker-gutter, 32px);
 }
 
 .withmd-repo-picker-list {
@@ -1255,6 +1254,7 @@
 }
 
 .withmd-repo-picker-modal {
+  --withmd-repo-picker-gutter: 32px;
   position: relative;
   width: 100%;
   max-width: 520px;
@@ -1264,15 +1264,15 @@
 
 .withmd-repo-picker-close {
   position: absolute;
-  top: 24px;
-  right: 24px;
+  top: var(--withmd-repo-picker-gutter, 32px);
+  right: var(--withmd-repo-picker-gutter, 32px);
   z-index: 1;
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--withmd-glass-border);
+  border: 0;
   border-radius: 0;
   background: var(--withmd-glass-bg);
   color: var(--withmd-muted);
@@ -1992,19 +1992,18 @@
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  border: 1px solid var(--withmd-glass-border);
+  border: 0;
   background: var(--withmd-glass-bg);
   color: var(--withmd-body);
   font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 14px;
   text-align: left;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .withmd-repo-row:hover {
   background: var(--withmd-glass-bg-hover);
-  border-color: var(--withmd-border);
   color: var(--withmd-text);
 }
 
@@ -2025,7 +2024,7 @@
   font-size: 11px;
   font-weight: 500;
   color: var(--withmd-muted);
-  border: 1px solid var(--withmd-border);
+  border: 0;
   padding: 1px 6px;
   letter-spacing: 0.02em;
 }
