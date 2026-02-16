@@ -15,6 +15,7 @@ interface Props {
   statusMessage: string | null;
   realtimeSafeModeMessage?: string | null;
   user?: AuthUser;
+  peerCount?: number;
   formatBarOpen: boolean;
   onToggleFormatBar(): void;
   onUserModeChange(next: UserMode): void;
@@ -72,6 +73,7 @@ export default function DocumentToolbar({
   statusMessage,
   realtimeSafeModeMessage,
   user,
+  peerCount,
   formatBarOpen,
   onToggleFormatBar,
   onUserModeChange,
@@ -133,13 +135,19 @@ export default function DocumentToolbar({
             <span className="withmd-dock-gap" />
             <div className="withmd-row" style={{ gap: 6, alignItems: 'center' }}>
               {user.avatarUrl && (
-                <img
-                  src={user.avatarUrl}
-                  alt={user.githubLogin}
-                  style={{ width: 22, height: 22, borderRadius: '50%' }}
-                />
+                <span className="withmd-avatar-wrap">
+                  <img
+                    src={user.avatarUrl}
+                    alt={user.githubLogin}
+                    style={{ width: 22, height: 22, borderRadius: '50%' }}
+                  />
+                  {Boolean(peerCount) && <span className="withmd-avatar-online-dot" />}
+                </span>
               )}
               <span className="withmd-muted-xs">{user.githubLogin}</span>
+              {Boolean(peerCount) && (
+                <span className="withmd-presence-badge">+{peerCount}</span>
+              )}
               {onLogout && (
                 <button type="button" className="withmd-dock-btn" onClick={onLogout} aria-label="Logout">
                   <LogoutIcon />

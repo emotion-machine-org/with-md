@@ -12,6 +12,7 @@ import RepoPicker from '@/components/with-md/repo-picker';
 import type { ImportReviewRow } from '@/components/with-md/import-review-sheet';
 import { useAuth } from '@/hooks/with-md/use-auth';
 import { useCommentAnchors } from '@/hooks/with-md/use-comment-anchors';
+import { cursorColorForUser } from '@/lib/with-md/cursor-colors';
 import { useDocMode } from '@/hooks/with-md/use-doc-mode';
 import { getWithMdApi } from '@/lib/with-md/api';
 import { INLINE_REALTIME_MAX_BYTES, markdownByteLength } from '@/lib/with-md/collab-policy';
@@ -111,6 +112,12 @@ function remapPathAfterRewrite(currentPath: string, fromPath: string, toPath: st
 
 export default function WithMdShell({ repoId, filePath }: Props) {
   const { user } = useAuth();
+  const collabUser = useMemo(
+    () => user?.githubLogin
+      ? { name: user.githubLogin, color: cursorColorForUser(user.githubLogin) }
+      : undefined,
+    [user?.githubLogin],
+  );
   const filesPanelRef = useRef<HTMLElement | null>(null);
   const filesToggleRef = useRef<HTMLButtonElement | null>(null);
   const commentsToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -139,6 +146,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [importProcessing, setImportProcessing] = useState(false);
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const [formatBarOpen, setFormatBarOpen] = useState(false);
+  const [peerCount, setPeerCount] = useState(0);
   const pendingGitHubPaths = useMemo(() => {
     const merged = new Set(queuedGitHubPaths);
     for (const path of localEditedPaths) {
@@ -980,6 +988,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
               statusMessage={statusMessage}
               realtimeSafeModeMessage={realtimeSafeModeMessage}
               user={user ?? undefined}
+              peerCount={peerCount}
               formatBarOpen={formatBarOpen}
               onToggleFormatBar={() => setFormatBarOpen((v) => !v)}
               onUserModeChange={setUserMode}
@@ -1010,7 +1019,10 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   realtimeEnabled={realtimeEnabled}
                   userMode={userMode}
                   content={currentFile.content}
+                  collabUser={collabUser}
+                  onPeerCountChange={setPeerCount}
                   formatBarOpen={formatBarOpen}
+                  commentsOpen={commentsOpen}
                   comments={comments}
                   anchorByCommentId={anchorMap}
                   activeCommentId={activeComment?.id ?? null}
@@ -1086,6 +1098,23 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                 onDeleteComment={async (comment) => {
                   await api.deleteComment(comment.id);
                   if (activeCommentId === comment.id) {
+                    setActiveCommentId(null);
+                  }
+                  await reloadCurrentFileData();
+                  await reloadActivity();
+                }}
+                onReplyComment={async (parentComment, body) => {
+                  await onCreateComment({
+                    body,
+                    selection: null,
+                    parentComment,
+                  });
+                }}
+                onResolveThread={async (commentIds) => {
+                  for (const id of commentIds) {
+                    await api.deleteComment(id);
+                  }
+                  if (activeCommentId && commentIds.includes(activeCommentId)) {
                     setActiveCommentId(null);
                   }
                   await reloadCurrentFileData();

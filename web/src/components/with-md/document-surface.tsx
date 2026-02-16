@@ -26,7 +26,10 @@ interface Props {
   onResolveThread(commentIds: string[]): Promise<void>;
   markRequest: { requestId: number; commentMarkId: string; from: number; to: number } | null;
   onMarkRequestApplied(requestId: number): void;
+  collabUser?: { name: string; color: string };
+  onPeerCountChange?(count: number): void;
   formatBarOpen?: boolean;
+  commentsOpen?: boolean;
 }
 
 export default function DocumentSurface({
@@ -51,7 +54,10 @@ export default function DocumentSurface({
   onResolveThread,
   markRequest,
   onMarkRequestApplied,
+  collabUser,
+  onPeerCountChange,
   formatBarOpen,
+  commentsOpen,
 }: Props) {
   if (userMode === 'source') {
     return (
@@ -72,6 +78,7 @@ export default function DocumentSurface({
         realtimeEnabled={realtimeEnabled}
         content={content}
         authToken="local-dev-token"
+        collabUser={collabUser}
         comments={comments}
         anchorByCommentId={anchorByCommentId}
         activeCommentId={activeCommentId}
@@ -86,7 +93,9 @@ export default function DocumentSurface({
         onResolveThread={onResolveThread}
         markRequest={markRequest}
         onMarkRequestApplied={onMarkRequestApplied}
+        onPeerCountChange={onPeerCountChange}
         formatBarOpen={formatBarOpen}
+        commentsOpen={commentsOpen}
       />
     </div>
   );

@@ -73,8 +73,8 @@ export function useCollabDoc({ mdFileId, contentHash, token, enabled }: Params) 
     logCollab(`provider:init doc=${mdFileId} token=${token ? 'set' : 'missing'}`);
     const websocketProvider = new HocuspocusProviderWebsocket({
       url,
-      // We don't publish cursor awareness yet, so keep idle connections alive longer.
-      messageReconnectTimeout: 10 * 60 * 1000,
+      // Awareness heartbeats keep the connection alive; use the Hocuspocus default.
+      messageReconnectTimeout: 30_000,
     });
 
     return new HocuspocusProvider({

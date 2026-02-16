@@ -7,6 +7,7 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { EditorContent, useEditor } from '@tiptap/react';
 
 import FormatToolbar from '@/components/with-md/format-toolbar';
+import { usePeerCount } from '@/components/with-md/presence-strip';
 import { buildEditorExtensions } from '@/components/with-md/tiptap/editor-extensions';
 import { useCollabDoc } from '@/hooks/with-md/use-collab-doc';
 import { extractHeadingPathAtIndex, findAllIndices, lineNumberAtIndex, pickBestQuoteIndex } from '@/lib/with-md/anchor';
@@ -33,9 +34,12 @@ interface Props {
   onResolveThread(commentIds: string[]): Promise<void>;
   markRequest: { requestId: number; commentMarkId: string; from: number; to: number } | null;
   onMarkRequestApplied(requestId: number): void;
+  collabUser?: { name: string; color: string };
+  onPeerCountChange?(count: number): void;
   cursorHint?: CursorHint;
   cursorHintKey?: number;
   formatBarOpen?: boolean;
+  commentsOpen?: boolean;
   onHydratedChange?(ready: boolean): void;
 }
 
@@ -391,6 +395,8 @@ export default function CollabEditor({
   realtimeEnabled,
   content,
   authToken,
+  collabUser,
+  onPeerCountChange,
   comments,
   anchorByCommentId,
   activeCommentId,
@@ -408,6 +414,7 @@ export default function CollabEditor({
   cursorHint,
   cursorHintKey,
   formatBarOpen,
+  commentsOpen,
   onHydratedChange,
 }: Props) {
   const enableRealtime = realtimeEnabled;
@@ -425,6 +432,11 @@ export default function CollabEditor({
   const [replyingThreadId, setReplyingThreadId] = useState<string | null>(null);
   const realtimeActive = enableRealtime && Boolean(provider);
 
+  const peerCount = usePeerCount(provider, connected, collabUser?.name ?? 'withmd-user');
+  useEffect(() => {
+    onPeerCountChange?.(peerCount);
+  }, [peerCount, onPeerCountChange]);
+
   const editor = useEditor({
     immediatelyRender: false,
     editorProps: {
@@ -433,7 +445,7 @@ export default function CollabEditor({
     extensions: buildEditorExtensions({
       ydoc,
       provider,
-      user: { name: 'withmd-user', color: '#c7d2fe' },
+      user: collabUser ?? { name: 'withmd-user', color: '#c7d2fe' },
       enableRealtime,
     }),
     ...(realtimeActive
@@ -907,7 +919,7 @@ export default function CollabEditor({
     return getTopForDocPos(docPos);
   }, [editor, getTopForDocPos, pendingSelection, railTick]);
 
-  const hasPositionedThreads = positionedThreads.length > 0 || Boolean(pendingSelection);
+  const hasPositionedThreads = !commentsOpen && (positionedThreads.length > 0 || Boolean(pendingSelection));
 
   if (!editor) {
     return <p className="withmd-muted-sm">Loading editor...</p>;
@@ -951,7 +963,7 @@ export default function CollabEditor({
                 </div>
               </section>
             )}
-            {!pendingSelection && positionedThreads.map((thread) => (
+            {positionedThreads.map((thread) => (
               <section
                 key={thread.threadId}
                 className={`withmd-rail-thread ${thread.hasActive ? 'is-active' : ''}`}
