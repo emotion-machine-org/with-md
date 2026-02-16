@@ -6,6 +6,7 @@ import type { Editor } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { EditorContent, useEditor } from '@tiptap/react';
 
+import FormatToolbar from '@/components/with-md/format-toolbar';
 import { buildEditorExtensions } from '@/components/with-md/tiptap/editor-extensions';
 import { useCollabDoc } from '@/hooks/with-md/use-collab-doc';
 import { extractHeadingPathAtIndex, findAllIndices, lineNumberAtIndex, pickBestQuoteIndex } from '@/lib/with-md/anchor';
@@ -34,6 +35,7 @@ interface Props {
   onMarkRequestApplied(requestId: number): void;
   cursorHint?: CursorHint;
   cursorHintKey?: number;
+  formatBarOpen?: boolean;
   onHydratedChange?(ready: boolean): void;
 }
 
@@ -405,6 +407,7 @@ export default function CollabEditor({
   onMarkRequestApplied,
   cursorHint,
   cursorHintKey,
+  formatBarOpen,
   onHydratedChange,
 }: Props) {
   const enableRealtime = realtimeEnabled;
@@ -915,7 +918,8 @@ export default function CollabEditor({
   return (
     <div className="withmd-column withmd-fill withmd-gap-2">
       {showStatus && <div className="withmd-muted-xs">{reason}</div>}
-      <div className="withmd-editor-shell withmd-fill">
+      <div className="withmd-editor-shell withmd-column withmd-fill">
+        {formatBarOpen && <FormatToolbar editor={editor} />}
         <div ref={scrollContainerRef} className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill">
           <EditorContent editor={editor} />
         </div>

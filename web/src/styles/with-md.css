@@ -1938,6 +1938,136 @@
   width: 3px;
 }
 
+/* ── Format Toolbar ── */
+
+.withmd-fmt-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 6px;
+  background: var(--withmd-panel);
+  border-bottom: 1px solid var(--withmd-border);
+  flex-shrink: 0;
+  margin: 0 -48px;
+  padding-left: 48px;
+  padding-right: 48px;
+}
+
+.withmd-fmt-btn {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: var(--withmd-body);
+  border-radius: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.withmd-fmt-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+  opacity: 0.78;
+  flex-shrink: 0;
+}
+
+.withmd-fmt-btn:hover {
+  background: var(--withmd-dock-btn-hover);
+  color: var(--withmd-text);
+}
+
+.withmd-fmt-btn:hover svg {
+  opacity: 1;
+}
+
+.withmd-fmt-btn-active {
+  background: var(--withmd-dock-btn-active);
+  color: var(--withmd-text);
+}
+
+.withmd-fmt-btn-active svg {
+  opacity: 1;
+}
+
+.withmd-fmt-btn:hover .withmd-dock-tooltip {
+  opacity: 1;
+}
+
+.withmd-fmt-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.withmd-fmt-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--withmd-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.withmd-fmt-link-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 40px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--withmd-dock-bg);
+  border: 1px solid var(--withmd-border);
+  z-index: 20;
+}
+
+.withmd-fmt-link-input {
+  width: 220px;
+  border: 0;
+  border-bottom: 1px solid var(--withmd-border);
+  background: transparent;
+  color: var(--withmd-text);
+  font-size: 12px;
+  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 3px 0;
+  outline: none;
+}
+
+.withmd-fmt-link-input::placeholder {
+  color: var(--withmd-muted);
+}
+
+.withmd-fmt-link-input:focus {
+  border-bottom-color: var(--withmd-body);
+}
+
+.withmd-fmt-link-ok,
+.withmd-fmt-link-cancel {
+  border: 0;
+  background: transparent;
+  color: var(--withmd-body);
+  font-size: 12px;
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 3px 6px;
+}
+
+.withmd-fmt-link-ok:hover,
+.withmd-fmt-link-cancel:hover {
+  color: var(--withmd-text);
+}
+
 .withmd-dock-meta {
   max-width: 100%;
   background: var(--withmd-dock-meta-bg);

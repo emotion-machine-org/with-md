@@ -26,6 +26,7 @@ interface Props {
   onResolveThread(commentIds: string[]): Promise<void>;
   markRequest: { requestId: number; commentMarkId: string; from: number; to: number } | null;
   onMarkRequestApplied(requestId: number): void;
+  formatBarOpen?: boolean;
 }
 
 export default function DocumentSurface({
@@ -50,6 +51,7 @@ export default function DocumentSurface({
   onResolveThread,
   markRequest,
   onMarkRequestApplied,
+  formatBarOpen,
 }: Props) {
   if (userMode === 'source') {
     return (
@@ -84,6 +86,7 @@ export default function DocumentSurface({
         onResolveThread={onResolveThread}
         markRequest={markRequest}
         onMarkRequestApplied={onMarkRequestApplied}
+        formatBarOpen={formatBarOpen}
       />
     </div>
   );

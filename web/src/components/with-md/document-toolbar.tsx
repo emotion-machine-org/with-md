@@ -15,6 +15,8 @@ interface Props {
   statusMessage: string | null;
   realtimeSafeModeMessage?: string | null;
   user?: AuthUser;
+  formatBarOpen: boolean;
+  onToggleFormatBar(): void;
   onUserModeChange(next: UserMode): void;
   onPush(): void;
   onResync(): void;
@@ -70,6 +72,8 @@ export default function DocumentToolbar({
   statusMessage,
   realtimeSafeModeMessage,
   user,
+  formatBarOpen,
+  onToggleFormatBar,
   onUserModeChange,
   onPush,
   onResync,
@@ -77,9 +81,22 @@ export default function DocumentToolbar({
   onLogout,
 }: Props) {
   const syntaxLabel = syntaxReasons.map((reason) => SYNTAX_REASON_LABELS[reason] ?? reason).join(', ');
+  const showFormatToggle = userMode === 'document';
+
   return (
     <header className="withmd-dock-wrap">
       <div className="withmd-dock">
+        {showFormatToggle && (
+          <button
+            type="button"
+            className={modeClass(formatBarOpen)}
+            onClick={onToggleFormatBar}
+            aria-label="Toggle formatting"
+          >
+            <FormatExpandIcon />
+            <span className="withmd-dock-tooltip">Format</span>
+          </button>
+        )}
         <button
           type="button"
           className={modeClass(userMode === 'source')}
@@ -152,6 +169,14 @@ export default function DocumentToolbar({
         </div>
       )}
     </header>
+  );
+}
+
+function FormatExpandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12.9 6.858l4.242 4.243L7.242 21H3v-4.243l9.9-9.9zm1.414-1.414l2.121-2.122a1 1 0 0 1 1.414 0l2.829 2.829a1 1 0 0 1 0 1.414l-2.122 2.121-4.242-4.242z" />
+    </svg>
   );
 }
 

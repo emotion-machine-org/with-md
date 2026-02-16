@@ -138,6 +138,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [importOverlayVisible, setImportOverlayVisible] = useState(false);
   const [importProcessing, setImportProcessing] = useState(false);
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
+  const [formatBarOpen, setFormatBarOpen] = useState(false);
   const pendingGitHubPaths = useMemo(() => {
     const merged = new Set(queuedGitHubPaths);
     for (const path of localEditedPaths) {
@@ -979,6 +980,8 @@ export default function WithMdShell({ repoId, filePath }: Props) {
               statusMessage={statusMessage}
               realtimeSafeModeMessage={realtimeSafeModeMessage}
               user={user ?? undefined}
+              formatBarOpen={formatBarOpen}
+              onToggleFormatBar={() => setFormatBarOpen((v) => !v)}
               onUserModeChange={setUserMode}
               onPush={onPush}
               onResync={onResync}
@@ -1007,6 +1010,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   realtimeEnabled={realtimeEnabled}
                   userMode={userMode}
                   content={currentFile.content}
+                  formatBarOpen={formatBarOpen}
                   comments={comments}
                   anchorByCommentId={anchorMap}
                   activeCommentId={activeComment?.id ?? null}

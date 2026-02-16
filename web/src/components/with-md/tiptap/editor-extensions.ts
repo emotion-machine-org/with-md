@@ -1,4 +1,6 @@
 import Collaboration from '@tiptap/extension-collaboration';
+import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 import * as Y from 'yjs';
@@ -19,6 +21,11 @@ export function buildEditorExtensions(params: {
 
   const baseCore = [
     starterKit,
+    Underline,
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+    }),
     CommentMark,
     TableBlock,
   ];
