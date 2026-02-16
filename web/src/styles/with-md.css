@@ -265,6 +265,7 @@
   color: var(--withmd-body);
   font-size: 17px;
   line-height: 1.58;
+  padding-top: 1rem;
   padding-bottom: 3rem;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -1106,17 +1107,18 @@
 }
 
 .withmd-filetree {
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .withmd-filetree-row {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding-top: 5px;
-  padding-bottom: 5px;
+  gap: 8px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  padding-right: 8px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -1124,6 +1126,7 @@
   font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   text-align: left;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .withmd-filetree-row:hover {
@@ -1138,6 +1141,7 @@
 
 .withmd-filetree-dir {
   color: var(--withmd-filetree-dir-color);
+  font-weight: 500;
 }
 
 .withmd-filetree-file {
@@ -1145,13 +1149,45 @@
 }
 
 .withmd-filetree-caret {
-  width: 10px;
+  width: 12px;
   flex-shrink: 0;
-  opacity: 0.82;
+  opacity: 0.72;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
 }
 
-.withmd-filetree-caret-dot {
-  font-size: 9px;
+.withmd-filetree-caret-empty {
+  opacity: 0;
+}
+
+.withmd-filetree-chevron {
+  width: 11px;
+  height: 11px;
+  transition: transform 140ms ease;
+}
+
+.withmd-filetree-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.withmd-filetree-glyph {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.78;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.withmd-filetree-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.withmd-filetree-icon-file {
+  opacity: 0.86;
 }
 
 .withmd-filetree-label {

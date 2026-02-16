@@ -11,6 +11,31 @@ interface Props {
   activePath: string;
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={open ? 'withmd-filetree-chevron is-open' : 'withmd-filetree-chevron'}
+      viewBox="0 0 12 12"
+      aria-hidden="true"
+    >
+      <path d="M4 2.5L8 6L4 9.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FolderIcon({ open }: { open: boolean }) {
+  return (
+    <svg className={open ? 'withmd-filetree-icon is-open' : 'withmd-filetree-icon'} viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M1.5 4.5a1 1 0 0 1 1-1h3l1.1 1.2c.2.2.4.3.7.3h6.2a1 1 0 0 1 1 1v6.8a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+    </svg>
+  );
+}
+
 function encodePath(path: string): string {
   return path
     .split('/')
@@ -115,10 +140,15 @@ export default function FileTree({ repoId, files, activePath }: Props) {
           <button
             type="button"
             className="withmd-filetree-row withmd-filetree-dir"
-            style={{ paddingLeft: `${10 + depth * 12}px` }}
+            style={{ paddingLeft: `${8 + depth * 14}px` }}
             onClick={() => toggleDirectory(node.path)}
           >
-            <span className="withmd-filetree-caret">{isOpen ? '▾' : '▸'}</span>
+            <span className="withmd-filetree-caret" aria-hidden="true">
+              <ChevronIcon open={isOpen} />
+            </span>
+            <span className="withmd-filetree-glyph" aria-hidden="true">
+              <FolderIcon open={isOpen} />
+            </span>
             <span className="withmd-filetree-label">{node.name}</span>
           </button>
 
@@ -138,9 +168,9 @@ export default function FileTree({ repoId, files, activePath }: Props) {
         key={node.key}
         href={`/with-md/${repoId}/${encodePath(file.path)}`}
         className={active ? 'withmd-filetree-row withmd-filetree-file withmd-filetree-row-active' : 'withmd-filetree-row withmd-filetree-file'}
-        style={{ paddingLeft: `${10 + depth * 12}px` }}
+        style={{ paddingLeft: `${8 + depth * 14}px` }}
       >
-        <span className="withmd-filetree-caret withmd-filetree-caret-dot">•</span>
+        <span className="withmd-filetree-caret withmd-filetree-caret-empty" aria-hidden="true" />
         <span className="withmd-filetree-label">{node.name}</span>
       </Link>
     );
