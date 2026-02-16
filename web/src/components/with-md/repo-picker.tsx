@@ -92,71 +92,72 @@ export default function RepoPicker({ onSelect }: Props) {
 
   if (loading) {
     return (
-      <div className="withmd-panel withmd-empty-panel">
-        <p className="withmd-muted-sm">Loading repositories...</p>
+      <div className="withmd-repo-picker-panel">
+        <div className="withmd-repo-picker-loading">
+          <div className="withmd-repo-picker-spinner" />
+          <p className="withmd-muted-sm">Loading repositories...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="withmd-home-wrap">
-      <div className="withmd-panel withmd-home-panel">
-        <h2 className="withmd-sidebar-title">Select a repository</h2>
-        <p className="withmd-muted-sm withmd-mt-2">
-          Choose a repo to sync its .md files into with.md
-        </p>
+    <div className="withmd-repo-picker-panel">
+      <h2 className="withmd-sidebar-title">Select a repository</h2>
+      <p className="withmd-muted-sm withmd-mt-2">
+        Choose a repo to sync its .md files into with.md
+      </p>
 
-        {error && (
-          <p className="withmd-warning withmd-mt-3">{error}</p>
-        )}
+      {error && (
+        <p className="withmd-warning withmd-mt-3">{error}</p>
+      )}
 
-        {repos.length === 0 ? (
-          <div className="withmd-mt-6">
-            <p className="withmd-muted-sm">
-              No repositories found. Make sure the GitHub App is installed on at least one repo.
-            </p>
-            <div className="withmd-mt-3">
-              <a
-                href="https://github.com/apps/with-md/installations/new"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="withmd-btn withmd-btn-primary"
+      {repos.length === 0 ? (
+        <div className="withmd-mt-6">
+          <p className="withmd-muted-sm">
+            No repositories found. Make sure the GitHub App is installed on at least one repo.
+          </p>
+          <div className="withmd-mt-3">
+            <a
+              href="https://github.com/apps/with-md/installations/new"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="withmd-btn withmd-btn-primary"
+            >
+              Install GitHub App
+            </a>
+          </div>
+        </div>
+      ) : (
+        <div className="withmd-repo-picker-list">
+          {repos.map((repo) => {
+            const isSyncing = syncing === repo.fullName;
+            return (
+              <button
+                key={repo.githubRepoId}
+                type="button"
+                className="withmd-repo-row"
+                disabled={syncing !== null}
+                onClick={() => void handleSelect(repo)}
+                style={{
+                  opacity: syncing && !isSyncing ? 0.4 : 1,
+                  cursor: syncing ? 'wait' : 'pointer',
+                }}
               >
-                Install GitHub App
-              </a>
-            </div>
-          </div>
-        ) : (
-          <div className="withmd-column withmd-mt-6" style={{ gap: 2 }}>
-            {repos.map((repo) => {
-              const isSyncing = syncing === repo.fullName;
-              return (
-                <button
-                  key={repo.githubRepoId}
-                  type="button"
-                  className="withmd-repo-row"
-                  disabled={syncing !== null}
-                  onClick={() => void handleSelect(repo)}
-                  style={{
-                    opacity: syncing && !isSyncing ? 0.4 : 1,
-                    cursor: syncing ? 'wait' : 'pointer',
-                  }}
-                >
-                  <span className="withmd-repo-name">{repo.fullName}</span>
-                  {repo.isPrivate && (
-                    <span className="withmd-repo-badge">private</span>
-                  )}
-                  {isSyncing && (
-                    <span className="withmd-muted-xs" style={{ marginLeft: 'auto' }}>
-                      Syncing...
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                <span className="withmd-repo-name">{repo.fullName}</span>
+                {repo.isPrivate && (
+                  <span className="withmd-repo-badge">private</span>
+                )}
+                {isSyncing && (
+                  <span className="withmd-muted-xs" style={{ marginLeft: 'auto' }}>
+                    Syncing...
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

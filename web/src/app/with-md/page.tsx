@@ -49,8 +49,11 @@ export default function WithMdPage() {
   if (authLoading || checkingExisting) {
     return (
       <main className="withmd-bg withmd-page withmd-page-pad-6">
-        <div className="withmd-panel withmd-empty-panel">
-          <p className="withmd-muted-sm">Loading...</p>
+        <div className="withmd-repo-picker-panel">
+          <div className="withmd-repo-picker-loading">
+            <div className="withmd-repo-picker-spinner" />
+            <p className="withmd-muted-sm">Loading...</p>
+          </div>
         </div>
       </main>
     );

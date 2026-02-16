@@ -8,6 +8,7 @@ import DocumentToolbar from '@/components/with-md/document-toolbar';
 import FileTree from '@/components/with-md/file-tree';
 import ImportDropOverlay from '@/components/with-md/import-drop-overlay';
 import ImportReviewSheet from '@/components/with-md/import-review-sheet';
+import RepoPicker from '@/components/with-md/repo-picker';
 import type { ImportReviewRow } from '@/components/with-md/import-review-sheet';
 import { useAuth } from '@/hooks/with-md/use-auth';
 import { useCommentAnchors } from '@/hooks/with-md/use-comment-anchors';
@@ -130,6 +131,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [importReviewOpen, setImportReviewOpen] = useState(false);
   const [importOverlayVisible, setImportOverlayVisible] = useState(false);
   const [importProcessing, setImportProcessing] = useState(false);
+  const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const pendingGitHubPaths = useMemo(() => {
     const merged = new Set(queuedGitHubPaths);
     for (const path of localEditedPaths) {
@@ -804,6 +806,16 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     setStatusMessage(`Renamed ${result.renamedCount ?? result.movedCount ?? 0} path(s).`);
   }, [activeRepoId, currentFile, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
 
+  const onOpenRepoPicker = useCallback(() => {
+    setRepoPickerOpen(true);
+  }, []);
+
+  const onRepoPickerSelect = useCallback((result: { repoId: string }) => {
+    setRepoPickerOpen(false);
+    if (result.repoId === activeRepoId) return;
+    window.location.href = `/with-md/${encodeURIComponent(result.repoId)}`;
+  }, [activeRepoId]);
+
   const onToggleFiles = useCallback(() => {
     setFilesOpen((prev) => {
       const next = !prev;
@@ -844,6 +856,8 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                 files={files}
                 activePath={currentFile.path}
                 pendingPaths={pendingGitHubPaths}
+                activeRepo={repos.find((r) => r.repoId === activeRepoId)}
+                onOpenRepoPicker={onOpenRepoPicker}
                 onSelectPath={(path) => {
                   if (path === currentFile.path) return;
                   void selectFileByPath(path, { updateUrl: true, historyMode: 'push' });
@@ -1003,6 +1017,25 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         }}
         onSubmit={() => void onSubmitImportReview()}
       />
+      {repoPickerOpen && (
+        <div className="withmd-repo-picker-overlay" onClick={(e) => {
+          if (e.target === e.currentTarget) setRepoPickerOpen(false);
+        }}>
+          <div className="withmd-repo-picker-modal">
+            <button
+              type="button"
+              className="withmd-repo-picker-close"
+              onClick={() => setRepoPickerOpen(false)}
+              aria-label="Close"
+            >
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M2.5 2.5L9.5 9.5M9.5 2.5L2.5 9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </button>
+            <RepoPicker onSelect={onRepoPickerSelect} />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

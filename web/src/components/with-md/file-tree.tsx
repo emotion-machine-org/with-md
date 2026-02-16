@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DragEvent as ReactDragEvent } from 'react';
 
-import type { MdFile } from '@/lib/with-md/types';
+import type { MdFile, RepoSummary } from '@/lib/with-md/types';
 
 interface Props {
   repoId: string;
   files: MdFile[];
   activePath: string;
   pendingPaths?: ReadonlySet<string>;
+  activeRepo?: RepoSummary;
+  onOpenRepoPicker?: () => void;
   onSelectPath?: (path: string) => void;
   onMovePath?: (input: { fromPath: string; toDirectoryPath: string; isDirectory: boolean }) => Promise<void>;
   onRenamePath?: (input: { fromPath: string; toPath: string; isDirectory: boolean }) => Promise<void>;
@@ -163,7 +165,18 @@ function readDragPayload(event: ReactDragEvent<HTMLElement>): DragPayload | null
   }
 }
 
-export default function FileTree({ repoId, files, activePath, pendingPaths, onSelectPath, onMovePath, onRenamePath }: Props) {
+function SwitchIcon() {
+  return (
+    <svg className="withmd-repo-switcher-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M5.22 14.78a.75.75 0 0 0 1.06-1.06L4.56 12h8.69a.75.75 0 0 0 0-1.5H4.56l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3a.75.75 0 0 0 0 1.06l3 3ZM10.78 1.22a.75.75 0 0 0-1.06 1.06L11.44 4H2.75a.75.75 0 0 0 0 1.5h8.69l-1.72 1.72a.75.75 0 1 0 1.06 1.06l3-3a.75.75 0 0 0 0-1.06l-3-3Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+export default function FileTree({ repoId, files, activePath, pendingPaths, activeRepo, onOpenRepoPicker, onSelectPath, onMovePath, onRenamePath }: Props) {
   const tree = useMemo(() => buildTree(files), [files]);
   const pendingDirectoryPaths = useMemo(() => {
     const directories = new Set<string>();
@@ -412,6 +425,19 @@ export default function FileTree({ repoId, files, activePath, pendingPaths, onSe
 
   return (
     <aside className="withmd-drawer-section withmd-column withmd-fill withmd-pad-3">
+      {activeRepo && (
+        <button
+          type="button"
+          className="withmd-repo-switcher-btn"
+          onClick={onOpenRepoPicker}
+          title="Switch repository"
+        >
+          <span className="withmd-repo-switcher-label">
+            {activeRepo.owner}/{activeRepo.name}
+          </span>
+          <SwitchIcon />
+        </button>
+      )}
       <h2 className="withmd-sidebar-title">Files</h2>
       <div
         className={[
