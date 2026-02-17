@@ -33,6 +33,12 @@ interface ImportRowState extends ImportReviewRow {
   content: string;
 }
 
+interface ShareLinkSnapshot {
+  mdFileId: string;
+  viewUrl: string;
+  editUrl: string;
+}
+
 const FILES_PANEL_STORAGE_KEY = 'withmd-files-panel-open';
 const SIDE_TOGGLE_MIN_WIDTH = 48;
 const SIDE_TOGGLE_MAX_WIDTH = 96;
@@ -149,6 +155,8 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [formatBarOpen, setFormatBarOpen] = useState(false);
   const [branchSwitcherOpen, setBranchSwitcherOpen] = useState(false);
   const [peerCount, setPeerCount] = useState(0);
+  const [shareBusy, setShareBusy] = useState(false);
+  const shareLinkSnapshotRef = useRef<ShareLinkSnapshot | null>(null);
   const pendingGitHubPaths = useMemo(() => {
     const merged = new Set(queuedGitHubPaths);
     for (const path of localEditedPaths) {
@@ -762,6 +770,45 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     await reloadActivity();
   }, [activeRepoId, repos, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
 
+  const onCopyShareLink = useCallback(async (mode: 'view' | 'edit') => {
+    if (!currentFile || shareBusy) return;
+
+    setShareBusy(true);
+    try {
+      let snapshot = shareLinkSnapshotRef.current;
+      if (!snapshot || snapshot.mdFileId !== currentFile.mdFileId) {
+        setStatusMessage('Creating share link...');
+        const response = await fetch('/api/repo-share/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mdFileId: currentFile.mdFileId,
+          }),
+        });
+        const data = (await response.json().catch(() => null)) as
+          | { viewUrl?: string; editUrl?: string; error?: string }
+          | null;
+        if (!response.ok || !data?.viewUrl || !data?.editUrl) {
+          throw new Error(data?.error ?? 'Could not create share link.');
+        }
+        snapshot = {
+          mdFileId: currentFile.mdFileId,
+          viewUrl: data.viewUrl,
+          editUrl: data.editUrl,
+        };
+        shareLinkSnapshotRef.current = snapshot;
+      }
+
+      const url = mode === 'edit' ? snapshot.editUrl : snapshot.viewUrl;
+      await navigator.clipboard.writeText(url);
+      setStatusMessage(`${mode === 'edit' ? 'Edit' : 'View'} share link copied.`);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not copy share link.');
+    } finally {
+      setShareBusy(false);
+    }
+  }, [currentFile, shareBusy]);
+
   const openImportReviewFromFileList = useCallback(async (fileList: FileList) => {
     const dropped = Array.from(fileList);
     if (dropped.length === 0) {
@@ -1053,6 +1100,8 @@ export default function WithMdShell({ repoId, filePath }: Props) {
               onUserModeChange={setUserMode}
               onPush={onPush}
               onResync={onResync}
+              onCopyShareLink={onCopyShareLink}
+              shareBusy={shareBusy}
               onDownload={() => {
                 if (!currentFile) return;
                 const blob = new Blob([currentFile.content], { type: 'text/markdown' });

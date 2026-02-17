@@ -1,5 +1,7 @@
 'use client';
 
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import type { UserMode } from '@/lib/with-md/types';
 
 interface AuthUser {
@@ -23,6 +25,8 @@ interface Props {
   onResync(): void;
   onDownload?(): void;
   onLogout?(): void;
+  onCopyShareLink?(mode: 'view' | 'edit'): Promise<void>;
+  shareBusy?: boolean;
 }
 
 const SYNTAX_REASON_LABELS: Record<string, string> = {
@@ -81,9 +85,49 @@ export default function DocumentToolbar({
   onResync,
   onDownload,
   onLogout,
+  onCopyShareLink,
+  shareBusy = false,
 }: Props) {
   const syntaxLabel = syntaxReasons.map((reason) => SYNTAX_REASON_LABELS[reason] ?? reason).join(', ');
   const showFormatToggle = userMode === 'document';
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (!shareMenuRef.current?.contains(target)) {
+        setShareMenuOpen(false);
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShareMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [shareMenuOpen]);
+
+  useEffect(() => {
+    if (!shareBusy) return;
+    setShareMenuOpen(false);
+  }, [shareBusy]);
+
+  const onShareMenuAction = useCallback(async (mode: 'view' | 'edit') => {
+    if (!onCopyShareLink || shareBusy) return;
+    await onCopyShareLink(mode);
+    setShareMenuOpen(false);
+  }, [onCopyShareLink, shareBusy]);
 
   return (
     <header className="withmd-dock-wrap">
@@ -120,6 +164,44 @@ export default function DocumentToolbar({
           <DownloadIcon />
           <span className="withmd-dock-tooltip">Download</span>
         </button>
+        {onCopyShareLink && (
+          <div className="withmd-share-menu-wrap withmd-dock-share-wrap" ref={shareMenuRef}>
+            <button
+              type="button"
+              className={`withmd-dock-btn ${shareMenuOpen ? 'withmd-dock-btn-active' : ''}`}
+              aria-label="Share markdown snapshot"
+              aria-haspopup="menu"
+              aria-expanded={shareMenuOpen}
+              onClick={() => setShareMenuOpen((open) => !open)}
+              disabled={shareBusy}
+            >
+              <ShareIcon />
+              <span className="withmd-dock-tooltip">{shareBusy ? 'Creating Share...' : 'Share'}</span>
+            </button>
+            {shareMenuOpen ? (
+              <div className="withmd-share-menu withmd-dock-share-menu" role="menu" aria-label="Share links">
+                <button
+                  type="button"
+                  className="withmd-share-menu-item"
+                  role="menuitem"
+                  onClick={() => void onShareMenuAction('view')}
+                  disabled={shareBusy}
+                >
+                  Copy View Link
+                </button>
+                <button
+                  type="button"
+                  className="withmd-share-menu-item"
+                  role="menuitem"
+                  onClick={() => void onShareMenuAction('edit')}
+                  disabled={shareBusy}
+                >
+                  Copy Edit Link
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
         <button type="button" className="withmd-dock-btn" onClick={cycleBackground} aria-label="Change background">
           <ImageIcon />
           <span className="withmd-dock-tooltip">Change Background</span>
@@ -244,6 +326,14 @@ function DownloadIcon() {
   );
 }
 
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18 16.08a2.92 2.92 0 0 0-1.96.77l-6.12-3.56a3.18 3.18 0 0 0 0-2.58l6.12-3.56A3 3 0 1 0 15 5a2.89 2.89 0 0 0 .04.49L8.9 9.05a3 3 0 1 0 0 5.9l6.14 3.56a2.89 2.89 0 0 0-.04.49 3 3 0 1 0 3-2.92Z" />
+    </svg>
+  );
+}
+
 function LogoutIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -251,4 +341,3 @@ function LogoutIcon() {
     </svg>
   );
 }
-

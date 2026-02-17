@@ -16,6 +16,9 @@ const REPEAT_DEDUPE_MIN_BYTES = 1024;
 const HEADING_REPEAT_DEDUPE_MIN_BYTES = 2048;
 const HEADING_REPEAT_MIN_SECTION_BYTES = 800;
 const HEADING_REPEAT_MIN_DUPLICATED_BYTES = 512;
+const REPO_SHARE_REALTIME_PREFIX = 'rse1:';
+const REPO_SHARE_SHORT_ID_HASH_SCOPE = 'withmd:repo-share:short-id';
+const REPO_SHARE_EDIT_SECRET_HASH_SCOPE = 'withmd:repo-share:edit-secret';
 
 interface OversizeFileSnapshot {
   _id: Id<'mdFiles'>;
@@ -36,6 +39,47 @@ interface PersistNormalizationSignal {
   normalized?: boolean;
   normalizedRepeats?: number;
   normalizedStrippedLeadingPlaceholders?: boolean;
+}
+
+function parseRepoShareRealtimeToken(token: string): { shortId: string; editSecret: string } | null {
+  if (!token.startsWith(REPO_SHARE_REALTIME_PREFIX)) return null;
+  const raw = token.slice(REPO_SHARE_REALTIME_PREFIX.length);
+  const splitAt = raw.indexOf(':');
+  if (splitAt <= 0) return null;
+  const shortId = raw.slice(0, splitAt).trim();
+  const editSecret = raw.slice(splitAt + 1).trim();
+  if (!shortId || !editSecret) return null;
+  return { shortId, editSecret };
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function verifyRepoShareEditToken(
+  ctx: { db: { query: (table: 'repoShares') => any } },
+  token: string,
+  expectedMdFileId: string,
+): Promise<boolean> {
+  const parsed = parseRepoShareRealtimeToken(token);
+  if (!parsed) return false;
+
+  const shortIdHash = await sha256Hex(`${REPO_SHARE_SHORT_ID_HASH_SCOPE}:${parsed.shortId}`);
+  const editSecretHash = await sha256Hex(`${REPO_SHARE_EDIT_SECRET_HASH_SCOPE}:${parsed.editSecret}`);
+  const share = await ctx.db
+    .query('repoShares')
+    .withIndex('by_short_id_hash', (q: any) => q.eq('shortIdHash', shortIdHash))
+    .first();
+
+  if (!share) return false;
+  if (share.mdFileId !== expectedMdFileId) return false;
+  if (share.expiresAt <= Date.now()) return false;
+  if (typeof share.revokedAt === 'number') return false;
+  return share.editSecretHash === editSecretHash;
 }
 
 function stripLeadingPlaceholderParagraphs(content: string): { content: string; stripped: boolean } {
@@ -225,11 +269,20 @@ export const authenticate = internalQuery({
     mdFileId: v.string(),
   },
   handler: async (ctx, args) => {
-    // TODO: validate Clerk/GitHub identity and repo access.
     const file = await ctx.db.get(args.mdFileId as Id<'mdFiles'>);
     if (!file || file.isDeleted) {
       return { ok: false, reason: 'missing' as const };
     }
+
+    if (args.userToken.startsWith(REPO_SHARE_REALTIME_PREFIX)) {
+      const allowed = await verifyRepoShareEditToken(ctx as any, args.userToken, args.mdFileId);
+      if (!allowed) {
+        return { ok: false, reason: 'forbidden' as const };
+      }
+      return { ok: true };
+    }
+
+    // TODO: validate Clerk/GitHub identity and repo access.
     return { ok: true };
   },
 });
