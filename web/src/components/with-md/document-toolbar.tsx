@@ -24,8 +24,9 @@ interface Props {
   onPush(): void;
   onResync(): void;
   onDownload?(): void;
+  onCopyMarkdown?(): Promise<void>;
   onLogout?(): void;
-  onCopyShareLink?(mode: 'view' | 'edit'): Promise<void>;
+  onCopyShareLink?(mode: 'view' | 'edit' | 'markdown_url'): Promise<void>;
   shareBusy?: boolean;
 }
 
@@ -85,6 +86,7 @@ export default function DocumentToolbar({
   onPush,
   onResync,
   onDownload,
+  onCopyMarkdown,
   onLogout,
   onCopyShareLink,
   shareBusy = false,
@@ -124,11 +126,19 @@ export default function DocumentToolbar({
     setShareMenuOpen(false);
   }, [shareBusy]);
 
-  const onShareMenuAction = useCallback(async (mode: 'view' | 'edit') => {
+  const onShareMenuAction = useCallback(async (mode: 'view' | 'edit' | 'markdown_url') => {
     if (!onCopyShareLink || shareBusy) return;
-    await onCopyShareLink(mode);
-    setShareMenuOpen(false);
+    try {
+      await onCopyShareLink(mode);
+    } finally {
+      setShareMenuOpen(false);
+    }
   }, [onCopyShareLink, shareBusy]);
+
+  const onCopyMarkdownAction = useCallback(async () => {
+    if (!onCopyMarkdown) return;
+    await onCopyMarkdown();
+  }, [onCopyMarkdown]);
 
   const onCycleBackground = useCallback(() => {
     const next = cycleBackground();
@@ -176,6 +186,12 @@ export default function DocumentToolbar({
           <DownloadIcon />
           <span className="withmd-dock-tooltip">Download</span>
         </button>
+        {onCopyMarkdown && (
+          <button type="button" className="withmd-dock-btn" onClick={() => void onCopyMarkdownAction()} aria-label="Copy markdown">
+            <CopyIcon />
+            <span className="withmd-dock-tooltip">Copy Markdown</span>
+          </button>
+        )}
         {onCopyShareLink && (
           <div className="withmd-share-menu-wrap withmd-dock-share-wrap" ref={shareMenuRef}>
             <button
@@ -209,6 +225,15 @@ export default function DocumentToolbar({
                   disabled={shareBusy}
                 >
                   Copy Edit Link
+                </button>
+                <button
+                  type="button"
+                  className="withmd-share-menu-item"
+                  role="menuitem"
+                  onClick={() => void onShareMenuAction('markdown_url')}
+                  disabled={shareBusy}
+                >
+                  Copy Markdown URL
                 </button>
               </div>
             ) : null}
@@ -342,6 +367,14 @@ function ShareIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M18 16.08a2.92 2.92 0 0 0-1.96.77l-6.12-3.56a3.18 3.18 0 0 0 0-2.58l6.12-3.56A3 3 0 1 0 15 5a2.89 2.89 0 0 0 .04.49L8.9 9.05a3 3 0 1 0 0 5.9l6.14 3.56a2.89 2.89 0 0 0-.04.49 3 3 0 1 0 3-2.92Z" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M16 1a2 2 0 0 1 2 2v2h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-2H5a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h11Zm-8 18v2h11V7H8v12Zm8-16H5v14h1V7a2 2 0 0 1 2-2h8V3Z" />
     </svg>
   );
 }

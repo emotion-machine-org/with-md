@@ -37,6 +37,7 @@ interface ShareLinkSnapshot {
   mdFileId: string;
   viewUrl: string;
   editUrl: string;
+  markdownUrl: string;
 }
 
 const BRANCH_KEY_PREFIX = 'withmd-branch-';
@@ -69,6 +70,19 @@ function buildWithMdPath(repo: string, path?: string): string {
   const encodedRepo = encodeURIComponent(repo);
   if (!path) return `/with-md/${encodedRepo}`;
   return `/with-md/${encodedRepo}/${encodePath(path)}`;
+}
+
+function toMarkdownRawUrl(viewUrl: string): string {
+  try {
+    const url = new URL(viewUrl);
+    const trimmedPath = url.pathname.replace(/\/+$/, '');
+    url.pathname = `${trimmedPath}/raw`;
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return `${viewUrl.replace(/\/+$/, '')}/raw`;
+  }
 }
 
 function parseWithMdLocationPath(pathname: string): { repoId: string; filePath?: string } | null {
@@ -798,7 +812,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     await reloadActivity();
   }, [activeRepoId, repos, reloadActivity, setCurrentFileContext, setUrlForSelection]);
 
-  const onCopyShareLink = useCallback(async (mode: 'view' | 'edit') => {
+  const onCopyShareLink = useCallback(async (mode: 'view' | 'edit' | 'markdown_url') => {
     if (!currentFile || shareBusy) return;
 
     setShareBusy(true);
@@ -823,19 +837,41 @@ export default function WithMdShell({ repoId, filePath }: Props) {
           mdFileId: currentFile.mdFileId,
           viewUrl: data.viewUrl,
           editUrl: data.editUrl,
+          markdownUrl: toMarkdownRawUrl(data.viewUrl),
         };
         shareLinkSnapshotRef.current = snapshot;
       }
 
-      const url = mode === 'edit' ? snapshot.editUrl : snapshot.viewUrl;
+      const url = mode === 'edit'
+        ? snapshot.editUrl
+        : mode === 'markdown_url'
+          ? snapshot.markdownUrl
+          : snapshot.viewUrl;
       await navigator.clipboard.writeText(url);
-      setStatusMessage(`${mode === 'edit' ? 'Edit' : 'View'} share link copied.`);
+      setStatusMessage(
+        mode === 'edit'
+          ? 'Edit share link copied.'
+          : mode === 'markdown_url'
+            ? 'Markdown URL copied.'
+            : 'View share link copied.',
+      );
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Could not copy share link.');
     } finally {
       setShareBusy(false);
     }
   }, [currentFile, shareBusy]);
+
+  const onCopyMarkdown = useCallback(async () => {
+    if (!currentFile) return;
+    const markdown = userMode === 'source' ? sourceValue : currentFile.content;
+    try {
+      await navigator.clipboard.writeText(markdown);
+      setStatusMessage('Markdown copied.');
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not copy markdown.');
+    }
+  }, [currentFile, sourceValue, userMode]);
 
   const openImportReviewFromFileList = useCallback(async (fileList: FileList) => {
     const dropped = Array.from(fileList);
@@ -1130,6 +1166,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
               onUserModeChange={setUserMode}
               onPush={onPush}
               onResync={onResync}
+              onCopyMarkdown={onCopyMarkdown}
               onCopyShareLink={onCopyShareLink}
               shareBusy={shareBusy}
               onDownload={() => {

@@ -126,20 +126,55 @@ export default function RepoShareShell({ token }: Props) {
   const canRealtimeEdit = canEdit && share?.syntaxSupportStatus !== 'unsupported';
   const showEditor = Boolean(canRealtimeEdit);
   const renderedReadContent = useMemo(() => stripLeadingFrontmatter(content), [content]);
+  const markdownUrl = useMemo(() => {
+    if (!share?.viewUrl) return '';
+    return `${share.viewUrl.replace(/\/+$/, '')}/raw`;
+  }, [share?.viewUrl]);
 
   const onCopyViewLink = useCallback(async () => {
     if (!share?.viewUrl) return;
-    await navigator.clipboard.writeText(share.viewUrl);
-    setStatusMessage('View link copied.');
-    setShareMenuOpen(false);
+    try {
+      await navigator.clipboard.writeText(share.viewUrl);
+      setStatusMessage('View link copied.');
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not copy view link.');
+    } finally {
+      setShareMenuOpen(false);
+    }
   }, [share?.viewUrl]);
 
   const onCopyEditLink = useCallback(async () => {
     if (!share?.editUrl) return;
-    await navigator.clipboard.writeText(share.editUrl);
-    setStatusMessage('Edit link copied.');
-    setShareMenuOpen(false);
+    try {
+      await navigator.clipboard.writeText(share.editUrl);
+      setStatusMessage('Edit link copied.');
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not copy edit link.');
+    } finally {
+      setShareMenuOpen(false);
+    }
   }, [share?.editUrl]);
+
+  const onCopyMarkdownUrl = useCallback(async () => {
+    if (!markdownUrl) return;
+    try {
+      await navigator.clipboard.writeText(markdownUrl);
+      setStatusMessage('Markdown URL copied.');
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not copy markdown URL.');
+    } finally {
+      setShareMenuOpen(false);
+    }
+  }, [markdownUrl]);
+
+  const onCopyMarkdown = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setStatusMessage('Markdown copied.');
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Could not copy markdown.');
+    }
+  }, [content]);
 
   const collabUser = useMemo(
     () => ({ name: collabName, color: cursorColorForUser(collabName) }),
@@ -210,6 +245,15 @@ export default function RepoShareShell({ token }: Props) {
         <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill withmd-anon-share-panel">
           <header className="withmd-dock-wrap withmd-anon-share-toolbar">
             <div className="withmd-dock">
+              <button
+                type="button"
+                className="withmd-dock-btn"
+                aria-label="Copy markdown text"
+                onClick={() => void onCopyMarkdown()}
+              >
+                <CopyIcon />
+                <span className="withmd-dock-tooltip">Copy Markdown</span>
+              </button>
               <div className="withmd-share-menu-wrap withmd-dock-share-wrap" ref={shareMenuRef}>
                 <button
                   type="button"
@@ -219,9 +263,7 @@ export default function RepoShareShell({ token }: Props) {
                   aria-expanded={shareMenuOpen}
                   onClick={() => setShareMenuOpen((prev) => !prev)}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M18 16.08a2.92 2.92 0 0 0-1.96.77l-6.12-3.56a3.18 3.18 0 0 0 0-2.58l6.12-3.56A3 3 0 1 0 15 5a2.89 2.89 0 0 0 .04.49L8.9 9.05a3 3 0 1 0 0 5.9l6.14 3.56a2.89 2.89 0 0 0-.04.49 3 3 0 1 0 3-2.92Z" />
-                  </svg>
+                  <ShareIcon />
                   <span className="withmd-dock-tooltip">Share</span>
                 </button>
                 {shareMenuOpen ? (
@@ -237,6 +279,14 @@ export default function RepoShareShell({ token }: Props) {
                       disabled={!share.editUrl}
                     >
                       {share.editUrl ? 'Copy Edit Link' : 'Edit Link Unavailable'}
+                    </button>
+                    <button
+                      type="button"
+                      className="withmd-share-menu-item"
+                      role="menuitem"
+                      onClick={() => void onCopyMarkdownUrl()}
+                    >
+                      Copy Markdown URL
                     </button>
                   </div>
                 ) : null}
@@ -292,5 +342,21 @@ export default function RepoShareShell({ token }: Props) {
         </div>
       </section>
     </main>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18 16.08a2.92 2.92 0 0 0-1.96.77l-6.12-3.56a3.18 3.18 0 0 0 0-2.58l6.12-3.56A3 3 0 1 0 15 5a2.89 2.89 0 0 0 .04.49L8.9 9.05a3 3 0 1 0 0 5.9l6.14 3.56a2.89 2.89 0 0 0-.04.49 3 3 0 1 0 3-2.92Z" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M16 1a2 2 0 0 1 2 2v2h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-2H5a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h11Zm-8 18v2h11V7H8v12Zm8-16H5v14h1V7a2 2 0 0 1 2-2h8V3Z" />
+    </svg>
   );
 }
