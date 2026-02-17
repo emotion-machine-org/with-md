@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
 
+import ImportDropOverlay from '@/components/with-md/import-drop-overlay';
 import { useAuth } from '@/hooks/with-md/use-auth';
 
 function isMarkdownName(name: string): boolean {
@@ -15,6 +16,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [anonBusy, setAnonBusy] = useState(false);
   const [anonMessage, setAnonMessage] = useState<string | null>(null);
+  const [landingDropActive, setLandingDropActive] = useState(false);
 
   const uploadAnonymousMarkdown = useCallback(async (file: File) => {
     if (!isMarkdownName(file.name)) {
@@ -56,21 +58,86 @@ export default function Home() {
     event.target.value = '';
   }, [uploadAnonymousMarkdown]);
 
-  const onDrop = useCallback(async (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    if (anonBusy) return;
-    const file = event.dataTransfer.files?.[0];
-    if (!file) return;
-    await uploadAnonymousMarkdown(file);
-  }, [anonBusy, uploadAnonymousMarkdown]);
-
   const onOpenFilePicker = useCallback(() => {
     if (anonBusy) return;
     fileInputRef.current?.click();
   }, [anonBusy]);
 
+  useEffect(() => {
+    let dragDepth = 0;
+    const hasFiles = (event: DragEvent) =>
+      Array.from(event.dataTransfer?.types ?? []).includes('Files');
+
+    const onDragEnter = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth += 1;
+      setLandingDropActive(true);
+    };
+
+    const onDragOver = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const onDragLeave = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) {
+        setLandingDropActive(false);
+      }
+    };
+
+    const onDrop = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      setLandingDropActive(false);
+      if (anonBusy) return;
+      const file = event.dataTransfer?.files?.[0];
+      if (!file) return;
+      void uploadAnonymousMarkdown(file);
+    };
+
+    window.addEventListener('dragenter', onDragEnter);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [anonBusy, uploadAnonymousMarkdown]);
+
   return (
-    <main className="withmd-bg withmd-page withmd-landing">
+    <main className={`withmd-bg withmd-page withmd-landing ${landingDropActive ? 'is-drop-active' : ''}`}>
+      <ImportDropOverlay
+        visible={landingDropActive}
+        processing={false}
+        idleTitle="Drag & drop markdown here"
+        idleSubtitle="Drop anywhere on this page to create a share link."
+      />
+      <div className="withmd-landing-drop-hints" aria-hidden="true">
+        <span className="withmd-landing-drop-hint withmd-landing-drop-hint-label withmd-landing-drop-hint-tl">
+          <span>Drag &amp; Drop</span>
+          <span>Your Markdown Files</span>
+          <span>Into This Area</span>
+        </span>
+        <span className="withmd-landing-drop-hint withmd-landing-drop-hint-tr">+</span>
+        <span className="withmd-landing-drop-hint withmd-landing-drop-hint-bl">+</span>
+        <span className="withmd-landing-drop-hint withmd-landing-drop-hint-label withmd-landing-drop-hint-br">
+          <span>Drag &amp; Drop</span>
+          <span>Your Markdown Files</span>
+          <span>Into This Area</span>
+        </span>
+      </div>
       <section className="withmd-doc-shell">
         <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill">
           <div className="withmd-doc-scroll">
@@ -83,7 +150,7 @@ export default function Home() {
                 {loading ? (
                   <span className="withmd-muted-xs">Loading...</span>
                 ) : user ? (
-                  <Link href="/with-md" className="withmd-btn-landing">
+                  <Link href="/with-md" className="withmd-btn-landing withmd-btn-landing-bright">
                     Open Workspace
                   </Link>
                 ) : (
@@ -93,19 +160,25 @@ export default function Home() {
                 )}
               </div>
 
-              <div
-                className={`withmd-anon-upload-zone ${anonBusy ? 'is-busy' : ''}`}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={onDrop}
-              >
-                <p className="withmd-anon-upload-title">No login? Share markdown instantly.</p>
-                <p className="withmd-anon-upload-sub">
-                  Drag one `.md` file here or upload it. You get a read link and an edit link.
+              <hr className="withmd-landing-rule" />
+
+              <div className="withmd-landing-section withmd-landing-anon-section">
+                <h2 className="withmd-landing-h2">No login? Share markdown instantly.</h2>
+                <p className="withmd-landing-body withmd-landing-anon-copy">
+                  Drag one `.md` file anywhere on this page, or upload it manually. You get a read
+                  link and an edit link.
                 </p>
-                <button type="button" className="withmd-anon-upload-btn" onClick={onOpenFilePicker} disabled={anonBusy}>
-                  {anonBusy ? 'Creating Share Link...' : 'Upload Markdown'}
-                </button>
-                {anonMessage ? <p className="withmd-anon-upload-message">{anonMessage}</p> : null}
+                <div className="withmd-landing-cta withmd-landing-anon-cta">
+                  <button
+                    type="button"
+                    className="withmd-btn-landing withmd-btn-landing-upload"
+                    onClick={onOpenFilePicker}
+                    disabled={anonBusy}
+                  >
+                    {anonBusy ? 'Creating Share Link...' : 'Upload Markdown'}
+                  </button>
+                </div>
+                {anonMessage ? <p className="withmd-landing-anon-message">{anonMessage}</p> : null}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -120,18 +193,8 @@ export default function Home() {
               <div className="withmd-landing-section">
                 <h2 className="withmd-landing-h2">Your files, your repos</h2>
                 <p className="withmd-landing-body">
-                  Edit markdown directly from any GitHub repo. Changes push back — no lock-in, no
+                  Edit markdown directly from any GitHub repo. No lock-in, no
                   proprietary formats.
-                </p>
-              </div>
-
-              <hr className="withmd-landing-rule" />
-
-              <div className="withmd-landing-section">
-                <h2 className="withmd-landing-h2">Three ways to write</h2>
-                <p className="withmd-landing-body">
-                  Rich editing, source mode, and a clean reading view. Frontmatter, GFM tables, code
-                  blocks — rendered faithfully.
                 </p>
               </div>
 
