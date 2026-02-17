@@ -639,13 +639,17 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         });
       }
 
+      // Optimistically add the comment to state so it appears immediately
+      setComments((prev) => [...prev, created]);
+
       if (selection) {
         setPendingSelection(null);
       }
       setActiveCommentId(created.id);
       setFocusRequestId((prev) => prev + 1);
-      await reloadCurrentFileData();
-      await reloadActivity();
+      // Reconcile in the background – don't block the UI
+      void reloadCurrentFileData();
+      void reloadActivity();
     },
     [currentFile, reloadActivity, reloadCurrentFileData, user?.githubLogin],
   );
