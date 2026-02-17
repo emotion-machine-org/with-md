@@ -17,6 +17,7 @@ export default function Home() {
   const [anonBusy, setAnonBusy] = useState(false);
   const [anonMessage, setAnonMessage] = useState<string | null>(null);
   const [landingDropActive, setLandingDropActive] = useState(false);
+  const [landscapeMode, setLandscapeMode] = useState(false);
 
   const uploadAnonymousMarkdown = useCallback(async (file: File) => {
     if (!isMarkdownName(file.name)) {
@@ -64,6 +65,11 @@ export default function Home() {
   }, [anonBusy]);
 
   useEffect(() => {
+    if (landscapeMode) {
+      setLandingDropActive(false);
+      return;
+    }
+
     let dragDepth = 0;
     const hasFiles = (event: DragEvent) =>
       Array.from(event.dataTransfer?.types ?? []).includes('Files');
@@ -114,31 +120,33 @@ export default function Home() {
       window.removeEventListener('dragleave', onDragLeave);
       window.removeEventListener('drop', onDrop);
     };
-  }, [anonBusy, uploadAnonymousMarkdown]);
+  }, [anonBusy, landscapeMode, uploadAnonymousMarkdown]);
 
   return (
     <main className={`withmd-bg withmd-page withmd-landing ${landingDropActive ? 'is-drop-active' : ''}`}>
-      <ImportDropOverlay
-        visible={landingDropActive}
-        processing={false}
-        idleTitle="Drag & drop markdown here"
-        idleSubtitle="Drop anywhere on this page to create a share link."
-      />
-      <div className="withmd-landing-drop-hints" aria-hidden="true">
-        <span className="withmd-landing-drop-hint withmd-landing-drop-hint-label withmd-landing-drop-hint-tl">
-          <span>Drag &amp; Drop</span>
-          <span>Your Markdown Files</span>
-          <span>Into This Area</span>
-        </span>
-        <span className="withmd-landing-drop-hint withmd-landing-drop-hint-tr">+</span>
-        <span className="withmd-landing-drop-hint withmd-landing-drop-hint-bl">+</span>
-        <span className="withmd-landing-drop-hint withmd-landing-drop-hint-label withmd-landing-drop-hint-br">
-          <span>Drag &amp; Drop</span>
-          <span>Your Markdown Files</span>
-          <span>Into This Area</span>
-        </span>
-      </div>
-      <section className="withmd-doc-shell">
+      {!landscapeMode ? (
+        <>
+          <ImportDropOverlay
+            visible={landingDropActive}
+            processing={false}
+            idleTitle="Drag & drop markdown here"
+            idleSubtitle="Drop anywhere on this page to create a share link."
+          />
+          <div className="withmd-landing-drop-hints" aria-hidden="true">
+            <span className="withmd-landing-drop-hint withmd-landing-drop-hint-label withmd-landing-drop-hint-tl">
+              <span>Drag &amp; Drop</span>
+              <span>Your Markdown Files</span>
+              <span>Into This Area</span>
+            </span>
+            <span className="withmd-landing-drop-hint withmd-landing-drop-hint-tr">+</span>
+            <span className="withmd-landing-drop-hint withmd-landing-drop-hint-bl">+</span>
+            <span className="withmd-landing-drop-hint withmd-landing-drop-hint-label withmd-landing-drop-hint-br">
+              <span>Drag &amp; Drop</span>
+              <span>Your Markdown Files</span>
+              <span>Into This Area</span>
+            </span>
+          </div>
+          <section className="withmd-doc-shell">
         <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill">
           <div className="withmd-doc-scroll">
             <div className="withmd-landing-inner">
@@ -221,7 +229,16 @@ export default function Home() {
             </div>
           </div>
         </div>
-      </section>
+          </section>
+        </>
+      ) : null}
+      <button
+        type="button"
+        className="withmd-landing-landscape-toggle"
+        onClick={() => setLandscapeMode((prev) => !prev)}
+      >
+        {landscapeMode ? 'Bring things back.' : "Oh, I'm just here to enjoy the landscape."}
+      </button>
     </main>
   );
 }

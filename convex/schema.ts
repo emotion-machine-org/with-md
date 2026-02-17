@@ -127,6 +127,7 @@ export default defineSchema({
     githubLogin: v.string(),
     avatarUrl: v.optional(v.string()),
     email: v.optional(v.string()),
+    bgIndex: v.optional(v.number()),
   }).index('by_github_user_id', ['githubUserId']),
 
   anonShares: defineTable({

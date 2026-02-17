@@ -1,4 +1,4 @@
-import { mutation } from './_generated/server';
+import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
 export const upsertFromGithub = mutation({
@@ -29,5 +29,32 @@ export const upsertFromGithub = mutation({
       avatarUrl: args.avatarUrl,
       email: args.email,
     });
+  },
+});
+
+export const get = query({
+  args: {
+    userId: v.id('users'),
+  },
+  handler: async (ctx, args) => {
+    return ctx.db.get(args.userId);
+  },
+});
+
+export const setBackground = mutation({
+  args: {
+    userId: v.id('users'),
+    bgIndex: v.number(),
+  },
+  handler: async (ctx, args) => {
+    if (args.bgIndex < 0 || args.bgIndex > 11) {
+      throw new Error('bgIndex out of range');
+    }
+    const existing = await ctx.db.get(args.userId);
+    if (!existing) throw new Error('User not found');
+    await ctx.db.patch(args.userId, {
+      bgIndex: args.bgIndex,
+    });
+    return { ok: true };
   },
 });

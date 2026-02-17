@@ -771,6 +771,7 @@
 
 .withmd-landing {
   --withmd-landing-drop-frame-inset: 72px;
+  --withmd-landing-doc-max-width: 780px;
   display: flex;
   justify-content: center;
   position: relative;
@@ -912,20 +913,47 @@
 
 .withmd-landing-drop-hint-tr,
 .withmd-landing-drop-hint-bl {
-  font-size: 66px;
-  font-weight: 200;
-  letter-spacing: 0;
-  line-height: 1;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;
+  line-height: 0;
+}
+
+.withmd-landing-drop-hint-tr::before,
+.withmd-landing-drop-hint-tr::after,
+.withmd-landing-drop-hint-bl::before,
+.withmd-landing-drop-hint-bl::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: currentColor;
+}
+
+.withmd-landing-drop-hint-tr::before,
+.withmd-landing-drop-hint-bl::before {
+  width: 4px;
+  height: 36px;
+}
+
+.withmd-landing-drop-hint-tr::after,
+.withmd-landing-drop-hint-bl::after {
+  width: 36px;
+  height: 4px;
 }
 
 .withmd-landing-drop-hint-tr {
-  top: var(--withmd-drop-hint-pad);
-  right: var(--withmd-drop-hint-pad);
+  top: 0;
+  right: 0;
 }
 
 .withmd-landing-drop-hint-bl {
-  left: var(--withmd-drop-hint-pad);
-  bottom: var(--withmd-drop-hint-pad);
+  left: 0;
+  bottom: 0;
 }
 
 .withmd-landing.is-drop-active .withmd-landing-drop-hint {
@@ -961,7 +989,7 @@
 }
 
 .withmd-landing-cta + .withmd-landing-rule {
-  margin-top: 64px;
+  margin-top: 48px;
 }
 
 .withmd-landing-anon-section {
@@ -981,6 +1009,35 @@
   color: var(--withmd-body);
   font-size: 14px;
   line-height: 1.45;
+}
+
+.withmd-landing-landscape-toggle {
+  position: fixed;
+  right: calc(max((100vw - var(--withmd-landing-doc-max-width)) / 2, 0px) + 16px);
+  bottom: 22px;
+  z-index: 24;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--withmd-panel) 42%, transparent);
+  backdrop-filter: blur(3px);
+  color: rgba(245, 245, 244, 0.86);
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.25;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(245, 245, 244, 0.56);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, text-decoration-color 160ms ease;
+}
+
+.withmd-landing-landscape-toggle:hover {
+  background: color-mix(in srgb, var(--withmd-panel) 62%, transparent);
+  color: rgba(245, 245, 244, 0.96);
+  text-decoration-color: rgba(245, 245, 244, 0.88);
 }
 
 .withmd-anon-upload-zone {
@@ -1053,7 +1110,26 @@
 
   .withmd-landing-drop-hint-tr,
   .withmd-landing-drop-hint-bl {
-    font-size: 42px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .withmd-landing-drop-hint-tr::before,
+  .withmd-landing-drop-hint-bl::before {
+    width: 3px;
+    height: 24px;
+  }
+
+  .withmd-landing-drop-hint-tr::after,
+  .withmd-landing-drop-hint-bl::after {
+    width: 24px;
+    height: 3px;
+  }
+
+  .withmd-landing-landscape-toggle {
+    bottom: 14px;
+    font-size: 13px;
+    padding: 7px 10px;
   }
 }
 
@@ -2653,6 +2729,10 @@
 }
 
 @media (max-width: 1200px) {
+  .withmd-landing {
+    --withmd-landing-doc-max-width: 880px;
+  }
+
   .withmd-stage-layout {
     --withmd-side-open-width: 316px;
   }

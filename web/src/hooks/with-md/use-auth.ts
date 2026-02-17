@@ -6,6 +6,7 @@ interface AuthUser {
   userId: string;
   githubLogin: string;
   avatarUrl?: string;
+  bgIndex?: number | null;
 }
 
 interface AuthState {
@@ -31,14 +32,47 @@ export function useAuth(): AuthState {
           userId?: string;
           githubLogin?: string;
           avatarUrl?: string;
+          bgIndex?: number | null;
         };
 
         if (!active) return;
         if (data.authenticated && data.userId && data.githubLogin) {
+          const isValidBg = Number.isFinite(data.bgIndex)
+            && typeof data.bgIndex === 'number'
+            && data.bgIndex >= 0
+            && data.bgIndex <= 11;
+          if (isValidBg) {
+            const bg = String(Math.floor(data.bgIndex as number));
+            document.documentElement.setAttribute('data-bg', bg);
+            try {
+              window.localStorage.setItem('withmd-bg', bg);
+            } catch {
+              // noop
+            }
+          } else {
+            // Preserve current local background when user has no server preference yet,
+            // then promote that local value to server once after login.
+            try {
+              const raw = window.localStorage.getItem('withmd-bg');
+              const localBg = raw == null ? NaN : Number.parseInt(raw, 10);
+              if (Number.isFinite(localBg) && localBg >= 0 && localBg <= 11) {
+                void fetch('/api/user-preferences/background', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ bgIndex: localBg }),
+                  keepalive: true,
+                });
+              }
+            } catch {
+              // noop
+            }
+          }
+
           setUser({
             userId: data.userId,
             githubLogin: data.githubLogin,
             avatarUrl: data.avatarUrl,
+            bgIndex: data.bgIndex ?? null,
           });
         } else {
           setUser(null);
