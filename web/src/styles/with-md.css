@@ -770,8 +770,10 @@
 }
 
 .withmd-landing {
+  --withmd-landing-drop-frame-inset: 72px;
   display: flex;
   justify-content: center;
+  position: relative;
   overflow: hidden;
 }
 
@@ -813,9 +815,9 @@
 }
 
 .withmd-btn-landing {
-  background: #f5f5f4;
+  background: #d8d6d1;
   color: #1c1917;
-  border: 1px solid #e7e5e4;
+  border: 0;
   border-radius: 999px;
   padding: 12px 32px;
   font-size: 15px;
@@ -824,7 +826,114 @@
   transition: background 160ms ease;
 }
 .withmd-btn-landing:hover {
-  background: #d4d3d0;
+  background: #c3c0b8;
+}
+
+.withmd-btn-landing:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.withmd-btn-landing-bright {
+  background: #f4f4f3;
+}
+
+.withmd-btn-landing-bright:hover {
+  background: #e4e3df;
+}
+
+.withmd-btn-landing-upload {
+  background: #3c3c3c;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.withmd-btn-landing-upload:hover {
+  background: #4a4a4a;
+}
+
+.withmd-landing-drop-hints {
+  --withmd-drop-line-color: rgba(245, 245, 244, 0.24);
+  --withmd-drop-hint-pad: 24px;
+  position: fixed;
+  inset: var(--withmd-landing-drop-frame-inset);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.withmd-landing .withmd-import-overlay-frame {
+  inset: var(--withmd-landing-drop-frame-inset);
+  background: color-mix(in srgb, var(--withmd-panel) 12%, transparent);
+  backdrop-filter: blur(1.5px);
+}
+
+.withmd-landing-drop-hints::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, var(--withmd-drop-line-color) 0 28px, transparent 28px 46px) top left / 100% 1px no-repeat,
+    repeating-linear-gradient(90deg, var(--withmd-drop-line-color) 0 28px, transparent 28px 46px) bottom left / 100% 1px no-repeat,
+    repeating-linear-gradient(0deg, var(--withmd-drop-line-color) 0 28px, transparent 28px 46px) top left / 1px 100% no-repeat,
+    repeating-linear-gradient(0deg, var(--withmd-drop-line-color) 0 28px, transparent 28px 46px) top right / 1px 100% no-repeat;
+}
+
+.withmd-landing-drop-hint {
+  position: absolute;
+  margin: 0;
+  font-size: 40px;
+  font-weight: 300;
+  color: rgba(245, 245, 244, 0.22);
+  transition: color 180ms ease, opacity 180ms ease;
+}
+
+.withmd-landing-drop-hint-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1.02;
+  letter-spacing: 0.02em;
+  width: min(420px, 32vw);
+}
+
+.withmd-landing-drop-hint-tl {
+  top: var(--withmd-drop-hint-pad);
+  left: var(--withmd-drop-hint-pad);
+}
+
+.withmd-landing-drop-hint-br {
+  right: var(--withmd-drop-hint-pad);
+  bottom: var(--withmd-drop-hint-pad);
+  text-align: right;
+  align-items: flex-end;
+}
+
+.withmd-landing-drop-hint-tr,
+.withmd-landing-drop-hint-bl {
+  font-size: 66px;
+  font-weight: 200;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.withmd-landing-drop-hint-tr {
+  top: var(--withmd-drop-hint-pad);
+  right: var(--withmd-drop-hint-pad);
+}
+
+.withmd-landing-drop-hint-bl {
+  left: var(--withmd-drop-hint-pad);
+  bottom: var(--withmd-drop-hint-pad);
+}
+
+.withmd-landing.is-drop-active .withmd-landing-drop-hint {
+  color: rgba(245, 245, 244, 0.40);
+}
+
+.withmd-landing.is-drop-active .withmd-landing-drop-hints::before {
+  --withmd-drop-line-color: rgba(245, 245, 244, 0.42);
 }
 
 .withmd-landing-h2 {
@@ -853,6 +962,25 @@
 
 .withmd-landing-cta + .withmd-landing-rule {
   margin-top: 64px;
+}
+
+.withmd-landing-anon-section {
+  margin-top: 0;
+}
+
+.withmd-landing-anon-copy {
+  max-width: 760px;
+}
+
+.withmd-landing-anon-cta {
+  margin-top: 16px;
+}
+
+.withmd-landing-anon-message {
+  margin: 10px 0 0;
+  color: var(--withmd-body);
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .withmd-anon-upload-zone {
@@ -902,6 +1030,31 @@
   margin: 10px 0 0;
   color: var(--withmd-body);
   font-size: 13px;
+}
+
+@media (max-width: 980px) {
+  .withmd-landing {
+    --withmd-landing-drop-frame-inset: 28px;
+  }
+
+  .withmd-landing-drop-hints {
+    --withmd-drop-hint-pad: 14px;
+  }
+
+  .withmd-landing-drop-hint {
+    font-size: 20px;
+  }
+
+  .withmd-landing-drop-hint-label {
+    font-size: 14px;
+    gap: 2px;
+    width: min(240px, 42vw);
+  }
+
+  .withmd-landing-drop-hint-tr,
+  .withmd-landing-drop-hint-bl {
+    font-size: 42px;
+  }
 }
 
 .withmd-hidden-input {
