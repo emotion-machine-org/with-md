@@ -39,6 +39,15 @@ interface ShareLinkSnapshot {
   editUrl: string;
 }
 
+const BRANCH_KEY_PREFIX = 'withmd-branch-';
+function readBranchPref(repoId: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  return localStorage.getItem(BRANCH_KEY_PREFIX + repoId) || fallback;
+}
+function writeBranchPref(repoId: string, branch: string): void {
+  localStorage.setItem(BRANCH_KEY_PREFIX + repoId, branch);
+}
+
 const FILES_PANEL_STORAGE_KEY = 'withmd-files-panel-open';
 const SIDE_TOGGLE_MIN_WIDTH = 48;
 const SIDE_TOGGLE_MAX_WIDTH = 96;
@@ -166,7 +175,14 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   }, [queuedGitHubPaths, localEditedPaths]);
 
   const activeRepo = repos.find((r) => r.repoId === activeRepoId);
-  const currentBranch = activeRepo?.activeBranch || activeRepo?.defaultBranch || 'main';
+  const [currentBranch, setCurrentBranch] = useState('main');
+
+  // Sync branch state with localStorage when repo changes
+  useEffect(() => {
+    if (!activeRepoId || !activeRepo?.defaultBranch) return;
+    const stored = readBranchPref(activeRepoId, activeRepo.defaultBranch);
+    setCurrentBranch(stored);
+  }, [activeRepoId, activeRepo?.defaultBranch]);
 
   const setUrlForSelection = useCallback((nextRepoId: string, nextPath?: string, mode: 'push' | 'replace' = 'push') => {
     if (typeof window === 'undefined') return;
@@ -211,8 +227,12 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         }
         setActiveRepoId(nextRepoId);
 
+        const repo = selectedRepo;
+        const initialBranch = readBranchPref(nextRepoId, repo?.defaultBranch || 'main');
+        setCurrentBranch(initialBranch);
+
         const [loadedFiles, queuedPaths] = await Promise.all([
-          api.listFilesByRepo(nextRepoId),
+          api.listFilesByRepo(nextRepoId, initialBranch),
           api.listQueuedPaths(nextRepoId),
         ]);
         if (!active) return;
@@ -448,14 +468,14 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       return [] as MdFile[];
     }
     const [loaded, queuedPaths] = await Promise.all([
-      api.listFilesByRepo(activeRepoId),
+      api.listFilesByRepo(activeRepoId, currentBranch),
       api.listQueuedPaths(activeRepoId),
     ]);
     setFiles(loaded);
     setQueuedGitHubPaths(new Set(queuedPaths));
     setLocalEditedPaths(new Set());
     return loaded;
-  }, [activeRepoId]);
+  }, [activeRepoId, currentBranch]);
 
   const setLocalPathDirty = useCallback((path: string, dirty: boolean) => {
     setLocalEditedPaths((prev) => {
@@ -491,7 +511,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     const requestId = ++fileSwitchRequestIdRef.current;
     let targetFile = files.find((file) => file.path === targetPath) ?? null;
     if (!targetFile) {
-      targetFile = await api.resolveByPath(activeRepoId, targetPath);
+      targetFile = await api.resolveByPath(activeRepoId, targetPath, currentBranch);
       if (!targetFile) {
         if (fileSwitchRequestIdRef.current !== requestId) return;
         setStatusMessage(`Requested path "${targetPath}" not found.`);
@@ -506,7 +526,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     if (options?.updateUrl !== false) {
       setUrlForSelection(activeRepoId, targetFile.path, options?.historyMode ?? 'push');
     }
-  }, [activeRepoId, files, setCurrentFileContext, setUrlForSelection]);
+  }, [activeRepoId, currentBranch, files, setCurrentFileContext, setUrlForSelection]);
 
   useEffect(() => {
     if (!activeRepoId) return;
@@ -652,7 +672,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       const res = await fetch('/api/github/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoId: activeRepoId }),
+        body: JSON.stringify({ repoId: activeRepoId, branch: currentBranch }),
       });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
@@ -665,7 +685,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     }
     await reloadFiles();
     await reloadActivity();
-  }, [activeRepoId, reloadActivity, reloadFiles]);
+  }, [activeRepoId, currentBranch, reloadActivity, reloadFiles]);
 
   const onResync = useCallback(async () => {
     if (!activeRepoId) return;
@@ -683,7 +703,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     }
 
     try {
-      const activeBranch = repo.activeBranch || undefined;
+      const activeBranch = currentBranch !== repo.defaultBranch ? currentBranch : undefined;
       const res = await fetch('/api/github/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -701,7 +721,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         throw new Error(data.error ?? 'Sync failed');
       }
       const data = (await res.json()) as { filesCount: number };
-      const branchLabel = activeBranch || repo.defaultBranch;
+      const branchLabel = currentBranch;
       setStatusMessage(`Re-synced ${data.filesCount} file(s) from ${branchLabel}.`);
 
       // Reload files
@@ -718,12 +738,16 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       setStatusMessage(err instanceof Error ? err.message : 'Re-sync failed.');
     }
     await reloadActivity();
-  }, [activeRepoId, repos, currentFile, reloadActivity, reloadFiles]);
+  }, [activeRepoId, currentBranch, repos, currentFile, reloadActivity, reloadFiles]);
 
   const onBranchSwitch = useCallback(async (branchName: string) => {
     if (!activeRepoId) return;
     const repo = repos.find((r) => r.repoId === activeRepoId);
     if (!repo || !repo.githubInstallationId || !repo.githubRepoId || !repo.defaultBranch) return;
+
+    // Persist branch preference locally
+    writeBranchPref(activeRepoId, branchName);
+    setCurrentBranch(branchName);
 
     const activeBranch = branchName === repo.defaultBranch ? undefined : branchName;
     setStatusMessage(`Switching to branch ${branchName}...`);
@@ -747,12 +771,12 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       }
       const data = (await res.json()) as { filesCount: number };
 
-      // Reload repos to pick up updated activeBranch
-      const loadedRepos = await api.listRepos(user?.userId);
-      setRepos(loadedRepos);
-
-      // Reload files
-      const loadedFiles = await reloadFiles();
+      // Reload files for the new branch
+      const loadedFiles = await api.listFilesByRepo(activeRepoId, branchName);
+      const queuedPaths = await api.listQueuedPaths(activeRepoId);
+      setFiles(loadedFiles);
+      setQueuedGitHubPaths(new Set(queuedPaths));
+      setLocalEditedPaths(new Set());
 
       // Reset to first file on the new branch
       const firstFile = loadedFiles[0] ?? null;
@@ -768,7 +792,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       setStatusMessage(err instanceof Error ? err.message : 'Branch switch failed.');
     }
     await reloadActivity();
-  }, [activeRepoId, repos, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
+  }, [activeRepoId, repos, reloadActivity, setCurrentFileContext, setUrlForSelection]);
 
   const onCopyShareLink = useCallback(async (mode: 'view' | 'edit') => {
     if (!currentFile || shareBusy) return;
@@ -929,6 +953,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
           content: row.content,
           conflictMode: row.conflictMode,
         })),
+        currentBranch,
       );
 
       const loadedFiles = await reloadFiles();
@@ -954,11 +979,11 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       setImportProcessing(false);
       setImportOverlayVisible(false);
     }
-  }, [activeRepoId, importRows, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
+  }, [activeRepoId, currentBranch, importRows, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
 
   const onMovePath = useCallback(async (input: { fromPath: string; toDirectoryPath: string; isDirectory: boolean }) => {
     if (!activeRepoId) return;
-    const result = await api.movePath(activeRepoId, input.fromPath, input.toDirectoryPath, 'keep_both');
+    const result = await api.movePath(activeRepoId, input.fromPath, input.toDirectoryPath, 'keep_both', currentBranch);
     if (!result.ok) {
       setStatusMessage(result.reason ?? 'Move failed.');
       return;
@@ -985,11 +1010,11 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
     await reloadActivity();
     setStatusMessage(`Moved ${result.movedCount ?? 0} path(s).`);
-  }, [activeRepoId, currentFile, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
+  }, [activeRepoId, currentBranch, currentFile, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
 
   const onRenamePath = useCallback(async (input: { fromPath: string; toPath: string; isDirectory: boolean }) => {
     if (!activeRepoId) return;
-    const result = await api.renamePath(activeRepoId, input.fromPath, input.toPath, 'keep_both');
+    const result = await api.renamePath(activeRepoId, input.fromPath, input.toPath, 'keep_both', currentBranch);
     if (!result.ok) {
       setStatusMessage(result.reason ?? 'Rename failed.');
       return;
@@ -1011,7 +1036,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
     await reloadActivity();
     setStatusMessage(`Renamed ${result.renamedCount ?? result.movedCount ?? 0} path(s).`);
-  }, [activeRepoId, currentFile, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
+  }, [activeRepoId, currentBranch, currentFile, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
 
   const onOpenRepoPicker = useCallback(() => {
     setRepoPickerOpen(true);
@@ -1064,6 +1089,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                 activePath={currentFile.path}
                 pendingPaths={pendingGitHubPaths}
                 activeRepo={repos.find((r) => r.repoId === activeRepoId)}
+                currentBranch={currentBranch}
                 onOpenRepoPicker={onOpenRepoPicker}
                 onOpenBranchSwitcher={activeRepo?.githubInstallationId ? () => setBranchSwitcherOpen(true) : undefined}
                 onSelectPath={(path) => {

@@ -369,6 +369,7 @@ async function upsertPendingPushQueueItem(
     path: string;
     newContent: string;
     createdAt: number;
+    branch?: string;
   },
 ) {
   const queued = await ctx.db
@@ -391,6 +392,7 @@ async function upsertPendingPushQueueItem(
     repoId: input.repoId,
     mdFileId: input.mdFileId,
     path: input.path,
+    branch: input.branch,
     newContent: input.newContent,
     authorLogins: [],
     authorEmails: [],
@@ -493,10 +495,35 @@ function buildPathRewritePlan(
 export const listByRepo = query({
   args: {
     repoId: v.id('repos'),
+    branch: v.optional(v.string()),
     includeDeleted: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const includeDeleted = args.includeDeleted ?? false;
+
+    if (args.branch !== undefined) {
+      const rows = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch))
+        .collect();
+
+      // Also include legacy records (branch=undefined) if targeting default branch
+      const repo = await ctx.db.get(args.repoId);
+      const isDefaultBranch = repo && args.branch === repo.defaultBranch;
+      let merged = rows;
+      if (isDefaultBranch) {
+        const legacy = await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', undefined))
+          .collect();
+        const explicitPaths = new Set(rows.map((r) => r.path));
+        merged = [...rows, ...legacy.filter((r) => !explicitPaths.has(r.path))];
+      }
+
+      return merged
+        .filter((row) => includeDeleted || !row.isDeleted)
+        .sort((a, b) => a.path.localeCompare(b.path));
+    }
 
     const rows = await ctx.db
       .query('mdFiles')
@@ -512,15 +539,35 @@ export const listByRepo = query({
 export const listByRepoMeta = query({
   args: {
     repoId: v.id('repos'),
+    branch: v.optional(v.string()),
     includeDeleted: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const includeDeleted = args.includeDeleted ?? false;
 
-    const rows = await ctx.db
-      .query('mdFiles')
-      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
-      .collect();
+    let rows;
+    if (args.branch !== undefined) {
+      rows = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch))
+        .collect();
+
+      const repo = await ctx.db.get(args.repoId);
+      const isDefaultBranch = repo && args.branch === repo.defaultBranch;
+      if (isDefaultBranch) {
+        const legacy = await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', undefined))
+          .collect();
+        const explicitPaths = new Set(rows.map((r) => r.path));
+        rows = [...rows, ...legacy.filter((r) => !explicitPaths.has(r.path))];
+      }
+    } else {
+      rows = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+        .collect();
+    }
 
     return rows
       .filter((row) => includeDeleted || !row.isDeleted)
@@ -549,8 +596,28 @@ export const resolveByPath = query({
   args: {
     repoId: v.id('repos'),
     path: v.string(),
+    branch: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (args.branch !== undefined) {
+      const hit = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_branch_path', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch).eq('path', args.path))
+        .first();
+      if (hit && !hit.isDeleted) return hit;
+
+      // Check legacy records (branch=undefined) for default branch
+      const repo = await ctx.db.get(args.repoId);
+      if (repo && args.branch === repo.defaultBranch) {
+        const legacy = await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_branch_path', (q) => q.eq('repoId', args.repoId).eq('branch', undefined).eq('path', args.path))
+          .first();
+        if (legacy && !legacy.isDeleted) return legacy;
+      }
+      return null;
+    }
+
     const hit = await ctx.db
       .query('mdFiles')
       .withIndex('by_repo_and_path', (q) => q.eq('repoId', args.repoId).eq('path', args.path))
@@ -565,12 +632,30 @@ export const resolveByPathMeta = query({
   args: {
     repoId: v.id('repos'),
     path: v.string(),
+    branch: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const hit = await ctx.db
-      .query('mdFiles')
-      .withIndex('by_repo_and_path', (q) => q.eq('repoId', args.repoId).eq('path', args.path))
-      .first();
+    let hit;
+    if (args.branch !== undefined) {
+      hit = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_branch_path', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch).eq('path', args.path))
+        .first();
+      if (!hit || hit.isDeleted) {
+        const repo = await ctx.db.get(args.repoId);
+        if (repo && args.branch === repo.defaultBranch) {
+          hit = await ctx.db
+            .query('mdFiles')
+            .withIndex('by_repo_branch_path', (q) => q.eq('repoId', args.repoId).eq('branch', undefined).eq('path', args.path))
+            .first();
+        }
+      }
+    } else {
+      hit = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_path', (q) => q.eq('repoId', args.repoId).eq('path', args.path))
+        .first();
+    }
 
     if (!hit || hit.isDeleted) return null;
 
@@ -591,16 +676,39 @@ export const upsertFromSync = mutation({
   args: {
     repoId: v.id('repos'),
     path: v.string(),
+    branch: v.optional(v.string()),
     content: v.string(),
     githubSha: v.string(),
     fileCategory: v.string(),
     sizeBytes: v.number(),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query('mdFiles')
-      .withIndex('by_repo_and_path', (q) => q.eq('repoId', args.repoId).eq('path', args.path))
-      .first();
+    // Look up existing file by branch-scoped index when branch is provided
+    let existing = args.branch !== undefined
+      ? await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_branch_path', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch).eq('path', args.path))
+          .first()
+      : null;
+
+    // Check legacy records (branch=undefined) for default branch
+    if (!existing && args.branch !== undefined) {
+      const repo = await ctx.db.get(args.repoId);
+      if (repo && args.branch === repo.defaultBranch) {
+        existing = await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_branch_path', (q) => q.eq('repoId', args.repoId).eq('branch', undefined).eq('path', args.path))
+          .first();
+      }
+    }
+
+    // Fallback: if no branch provided, use the old index
+    if (!existing && args.branch === undefined) {
+      existing = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_path', (q) => q.eq('repoId', args.repoId).eq('path', args.path))
+        .first();
+    }
 
     const syntax = detectUnsupportedSyntax(args.content);
     const now = Date.now();
@@ -638,6 +746,8 @@ export const upsertFromSync = mutation({
         isOversized: false,
         lastOversizeBytes: undefined,
         oversizeUpdatedAt: undefined,
+        // Upgrade legacy records to have explicit branch
+        ...(args.branch !== undefined && existing.branch === undefined ? { branch: args.branch } : {}),
       });
       return existing._id;
     }
@@ -645,6 +755,7 @@ export const upsertFromSync = mutation({
     return await ctx.db.insert('mdFiles', {
       repoId: args.repoId,
       path: args.path,
+      branch: args.branch,
       content: args.content,
       contentHash: hashContent(args.content),
       lastGithubSha: args.githubSha,
@@ -662,13 +773,33 @@ export const upsertFromSync = mutation({
 export const markMissingAsDeleted = mutation({
   args: {
     repoId: v.id('repos'),
+    branch: v.optional(v.string()),
     existingPaths: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const allFiles = await ctx.db
-      .query('mdFiles')
-      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
-      .collect();
+    let allFiles;
+    if (args.branch !== undefined) {
+      allFiles = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch))
+        .collect();
+
+      // Include legacy records (branch=undefined) for default branch
+      const repo = await ctx.db.get(args.repoId);
+      if (repo && args.branch === repo.defaultBranch) {
+        const legacy = await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', undefined))
+          .collect();
+        const explicitIds = new Set(allFiles.map((f) => f._id));
+        allFiles = [...allFiles, ...legacy.filter((f) => !explicitIds.has(f._id))];
+      }
+    } else {
+      allFiles = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+        .collect();
+    }
     const queuedItems = await ctx.db
       .query('pushQueue')
       .withIndex('by_repo_and_status', (q) => q.eq('repoId', args.repoId).eq('status', 'queued'))
@@ -741,6 +872,7 @@ export const saveSource = mutation({
       repoId: file.repoId,
       mdFileId: file._id,
       path: file.path,
+      branch: file.branch,
       newContent: args.sourceContent,
       authorLogins: [],
       authorEmails: [],
@@ -765,6 +897,7 @@ export const saveSource = mutation({
 export const importLocalBatch = mutation({
   args: {
     repoId: v.id('repos'),
+    branch: v.optional(v.string()),
     files: v.array(v.object({
       relativePath: v.string(),
       targetPath: v.optional(v.string()),
@@ -778,10 +911,27 @@ export const importLocalBatch = mutation({
       throw new Error('Repo not found');
     }
 
-    const repoFiles = await ctx.db
-      .query('mdFiles')
-      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
-      .collect();
+    let repoFiles;
+    if (args.branch !== undefined) {
+      repoFiles = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch))
+        .collect();
+      const isDefaultBranch = args.branch === repo.defaultBranch;
+      if (isDefaultBranch) {
+        const legacy = await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', undefined))
+          .collect();
+        const explicitIds = new Set(repoFiles.map((f) => f._id));
+        repoFiles = [...repoFiles, ...legacy.filter((f) => !explicitIds.has(f._id))];
+      }
+    } else {
+      repoFiles = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+        .collect();
+    }
 
     const now = Date.now();
     const activeByPath = new Map<string, (typeof repoFiles)[number]>();
@@ -873,6 +1023,7 @@ export const importLocalBatch = mutation({
           path: targetPath,
           newContent: sourceContent,
           createdAt: now,
+          branch: args.branch,
         });
 
         updated += 1;
@@ -917,6 +1068,7 @@ export const importLocalBatch = mutation({
           path: targetPath,
           newContent: sourceContent,
           createdAt: now,
+          branch: args.branch,
         });
 
         undoEntries.push({
@@ -943,6 +1095,7 @@ export const importLocalBatch = mutation({
       const mdFileId = await ctx.db.insert('mdFiles', {
         repoId: args.repoId,
         path: targetPath,
+        branch: args.branch,
         content: sourceContent,
         contentHash: sourceHash,
         lastGithubSha: `local_${sourceHash}`,
@@ -964,6 +1117,7 @@ export const importLocalBatch = mutation({
         path: targetPath,
         newContent: sourceContent,
         createdAt: now,
+        branch: args.branch,
       });
 
       undoEntries.push({
@@ -1032,6 +1186,7 @@ export const movePath = mutation({
     fromPath: v.string(),
     toDirectoryPath: v.optional(v.string()),
     conflictMode: v.optional(v.union(v.literal('keep_both'), v.literal('replace'))),
+    branch: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const fromPath = normalizePath(args.fromPath);
@@ -1045,10 +1200,27 @@ export const movePath = mutation({
       return { ok: false, reason: 'Invalid destination path.' as const };
     }
 
-    const repoFiles = await ctx.db
-      .query('mdFiles')
-      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
-      .collect();
+    let repoFiles;
+    if (args.branch !== undefined) {
+      repoFiles = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch))
+        .collect();
+      const repo = await ctx.db.get(args.repoId);
+      if (repo && args.branch === repo.defaultBranch) {
+        const legacy = await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', undefined))
+          .collect();
+        const explicitIds = new Set(repoFiles.map((f) => f._id));
+        repoFiles = [...repoFiles, ...legacy.filter((f) => !explicitIds.has(f._id))];
+      }
+    } else {
+      repoFiles = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+        .collect();
+    }
 
     const conflictMode: ConflictMode = args.conflictMode === 'replace' ? 'replace' : 'keep_both';
     const plan = buildPathRewritePlan(repoFiles, fromPath, nextRoot, conflictMode);
@@ -1100,6 +1272,7 @@ export const renamePath = mutation({
     fromPath: v.string(),
     toPath: v.string(),
     conflictMode: v.optional(v.union(v.literal('keep_both'), v.literal('replace'))),
+    branch: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const fromPath = normalizePath(args.fromPath);
@@ -1108,10 +1281,27 @@ export const renamePath = mutation({
       return { ok: false, reason: 'Invalid path.' as const };
     }
 
-    const repoFiles = await ctx.db
-      .query('mdFiles')
-      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
-      .collect();
+    let repoFiles;
+    if (args.branch !== undefined) {
+      repoFiles = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch))
+        .collect();
+      const repo = await ctx.db.get(args.repoId);
+      if (repo && args.branch === repo.defaultBranch) {
+        const legacy = await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_and_branch', (q) => q.eq('repoId', args.repoId).eq('branch', undefined))
+          .collect();
+        const explicitIds = new Set(repoFiles.map((f) => f._id));
+        repoFiles = [...repoFiles, ...legacy.filter((f) => !explicitIds.has(f._id))];
+      }
+    } else {
+      repoFiles = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+        .collect();
+    }
 
     const sourceFile = repoFiles.find((file) => !file.isDeleted && file.path === fromPath) ?? null;
     if (sourceFile && !isMarkdownFilePath(requestedToPath)) {
@@ -1402,6 +1592,7 @@ export const dedupeRepeatedContent = mutation({
         repoId: file.repoId,
         mdFileId: file._id,
         path: file.path,
+        branch: file.branch,
         newContent: collapsed.deduped,
         authorLogins: [],
         authorEmails: [],
@@ -1497,6 +1688,7 @@ export const restoreCanonicalClawMessengerReadme = mutation({
         repoId: file.repoId,
         mdFileId: file._id,
         path: file.path,
+        branch: file.branch,
         newContent: CLAW_MESSENGER_CANONICAL_README,
         authorLogins: [],
         authorEmails: [],

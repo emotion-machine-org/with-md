@@ -22,6 +22,7 @@ interface InstallationDoc {
 interface PushQueueItem {
   _id: string;
   path: string;
+  branch?: string;
   newContent: string;
   status: string;
 }
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = (await req.json()) as { repoId: string };
+  const body = (await req.json()) as { repoId: string; branch?: string };
 
   try {
     // Get repo details
@@ -56,12 +57,17 @@ export async function POST(req: NextRequest) {
       repoId: body.repoId as never,
     });
 
-    if (queued.length === 0) {
+    // Determine branch and filter queue items
+    const effectiveBranch = body.branch || repo.defaultBranch;
+    const branchFiltered = queued.filter((item) =>
+      item.branch === effectiveBranch || (!item.branch && effectiveBranch === repo.defaultBranch),
+    );
+
+    if (branchFiltered.length === 0) {
       return NextResponse.json({ pushed: 0, commitSha: null });
     }
 
     // Fetch current HEAD to get parent commit and base tree
-    const effectiveBranch = repo.activeBranch || repo.defaultBranch;
     const tree = await fetchMdTree(
       installation.githubInstallationId,
       repo.owner,
@@ -71,7 +77,7 @@ export async function POST(req: NextRequest) {
 
     // Deduplicate: keep latest content per path
     const fileMap = new Map<string, string>();
-    for (const item of queued) {
+    for (const item of branchFiltered) {
       fileMap.set(item.path, item.newContent);
     }
 
@@ -94,7 +100,7 @@ export async function POST(req: NextRequest) {
     );
 
     // Mark each push queue item as pushed
-    for (const item of queued) {
+    for (const item of branchFiltered) {
       await mutateConvex(F.mutations.pushQueueMarkPushed, {
         pushQueueId: item._id as never,
         commitSha,

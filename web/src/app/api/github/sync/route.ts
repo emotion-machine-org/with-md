@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
         await mutateConvex(F.mutations.mdFilesUpsertFromSync, {
           repoId: repoId as never,
           path: file.path,
+          branch: effectiveBranch,
           content,
           githubSha: file.sha,
           fileCategory: categorizeFile(file.path),
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
       preservedLocalOnlyCount?: number;
     }>(F.mutations.mdFilesMarkMissingAsDeleted, {
       repoId: repoId as never,
+      branch: effectiveBranch,
       existingPaths,
     });
 

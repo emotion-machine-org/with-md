@@ -11,6 +11,7 @@ interface Props {
   activePath: string;
   pendingPaths?: ReadonlySet<string>;
   activeRepo?: RepoSummary;
+  currentBranch?: string;
   onOpenRepoPicker?: () => void;
   onOpenBranchSwitcher?: () => void;
   onSelectPath?: (path: string) => void;
@@ -188,7 +189,7 @@ function BranchSmallIcon() {
   );
 }
 
-export default function FileTree({ repoId, files, activePath, pendingPaths, activeRepo, onOpenRepoPicker, onOpenBranchSwitcher, onSelectPath, onMovePath, onRenamePath }: Props) {
+export default function FileTree({ repoId, files, activePath, pendingPaths, activeRepo, currentBranch, onOpenRepoPicker, onOpenBranchSwitcher, onSelectPath, onMovePath, onRenamePath }: Props) {
   const tree = useMemo(() => buildTree(files), [files]);
   const pendingDirectoryPaths = useMemo(() => {
     const directories = new Set<string>();
@@ -476,7 +477,7 @@ export default function FileTree({ repoId, files, activePath, pendingPaths, acti
               <SwitchIcon />
             </span>
           </button>
-          {(activeRepo.activeBranch || activeRepo.defaultBranch) && (
+          {(currentBranch || activeRepo.defaultBranch) && (
             <button
               type="button"
               className="withmd-repo-switcher-branch"
@@ -485,7 +486,7 @@ export default function FileTree({ repoId, files, activePath, pendingPaths, acti
             >
               <BranchSmallIcon />
               <span className="withmd-repo-switcher-branch-name">
-                {activeRepo.activeBranch || activeRepo.defaultBranch}
+                {currentBranch || activeRepo.defaultBranch}
               </span>
               <SwitchIcon />
             </button>

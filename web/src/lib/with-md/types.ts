@@ -34,6 +34,7 @@ export interface MdFile {
   mdFileId: string;
   repoId: string;
   path: string;
+  branch?: string;
   content: string;
   contentHash: string;
   fileCategory: FileCategory;

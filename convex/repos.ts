@@ -191,7 +191,6 @@ export const upsertFromGithub = mutation({
         owner: args.owner,
         name: args.name,
         defaultBranch: args.defaultBranch,
-        activeBranch: args.activeBranch,
       });
       return existing._id;
     }
@@ -202,7 +201,6 @@ export const upsertFromGithub = mutation({
       owner: args.owner,
       name: args.name,
       defaultBranch: args.defaultBranch,
-      activeBranch: args.activeBranch,
       syncStatus: 'syncing',
     });
   },
