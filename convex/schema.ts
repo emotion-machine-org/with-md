@@ -128,4 +128,43 @@ export default defineSchema({
     avatarUrl: v.optional(v.string()),
     email: v.optional(v.string()),
   }).index('by_github_user_id', ['githubUserId']),
+
+  anonShares: defineTable({
+    shortId: v.string(),
+    title: v.string(),
+    content: v.string(),
+    contentHash: v.string(),
+    sizeBytes: v.number(),
+    syntaxSupportStatus: v.optional(v.string()),
+    syntaxSupportReasons: v.optional(v.array(v.string())),
+    yjsStateStorageId: v.optional(v.id('_storage')),
+    editSecretHash: v.optional(v.string()),
+    editSecret: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    isDeleted: v.boolean(),
+    deletedAt: v.optional(v.number()),
+    createdByIpHash: v.optional(v.string()),
+  }).index('by_short_id', ['shortId'])
+    .index('by_expires_at', ['expiresAt']),
+
+  anonRateLimits: defineTable({
+    bucket: v.string(),
+    count: v.number(),
+    updatedAt: v.number(),
+  }).index('by_bucket', ['bucket']),
+
+  repoShares: defineTable({
+    shortIdHash: v.string(),
+    editSecretHash: v.string(),
+    mdFileId: v.id('mdFiles'),
+    createdByUserId: v.id('users'),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index('by_short_id_hash', ['shortIdHash'])
+    .index('by_md_file', ['mdFileId'])
+    .index('by_expires_at', ['expiresAt']),
 });

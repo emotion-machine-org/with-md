@@ -23,9 +23,13 @@ function validateInternalSecret(request: Request): string | null {
   return null;
 }
 
+function isShareDocumentName(value: string): boolean {
+  return value.startsWith('share:') && value.length > 'share:'.length;
+}
+
 function isWriteConflictError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  return error.message.includes('Documents read from or written to the "mdFiles" table changed');
+  return error.message.includes('Documents read from or written to the') && error.message.includes('table changed');
 }
 
 function decodeBase64ToUint8Array(value: string): Uint8Array | null {
@@ -72,10 +76,16 @@ http.route({
       mdFileId: string;
     };
 
-    const result = await ctx.runQuery(internal.collab.authenticate, {
-      userToken: body.userToken ?? '',
-      mdFileId: body.mdFileId ?? '',
-    });
+    const documentName = body.mdFileId ?? '';
+    const result = isShareDocumentName(documentName)
+      ? await ctx.runQuery(internal.anonShares.authenticate, {
+        documentName,
+        editSecret: body.userToken ?? '',
+      })
+      : await ctx.runQuery(internal.collab.authenticate, {
+        userToken: body.userToken ?? '',
+        mdFileId: documentName,
+      });
 
     return Response.json(result);
   }),
@@ -92,9 +102,14 @@ http.route({
       mdFileId: string;
     };
 
-    const result = await ctx.runQuery(internal.collab.loadDocument, {
-      mdFileId: body.mdFileId as never,
-    });
+    const documentName = body.mdFileId ?? '';
+    const result = isShareDocumentName(documentName)
+      ? await ctx.runQuery(internal.anonShares.loadDocument, {
+        documentName,
+      })
+      : await ctx.runQuery(internal.collab.loadDocument, {
+        mdFileId: documentName as never,
+      });
 
     return Response.json(result);
   }),
@@ -116,11 +131,55 @@ http.route({
       normalizedStrippedLeadingPlaceholders?: boolean;
     };
 
+    const documentName = body.mdFileId ?? '';
+    if (isShareDocumentName(documentName)) {
+      const persistedSnapshot = await persistSnapshotFromBase64(ctx, body.yjsState);
+
+      try {
+        const result = await ctx.runMutation(internal.anonShares.storeDocument, {
+          documentName,
+          markdownContent: body.markdownContent ?? '',
+          yjsStateStorageId: persistedSnapshot?.storageId as never,
+        });
+        const parsed = (
+          result as {
+            persistPath?: string;
+            replacedYjsStateStorageId?: string;
+            documentVersion?: string;
+          } | undefined
+        ) ?? {};
+        const persistPath = parsed.persistPath ?? 'normal';
+        const keepSnapshot = persistPath === 'normal' || persistPath === 'unchanged';
+
+        if (!keepSnapshot && persistedSnapshot?.storageId) {
+          await ctx.storage.delete(persistedSnapshot.storageId);
+        }
+        if (parsed.replacedYjsStateStorageId && parsed.replacedYjsStateStorageId !== persistedSnapshot?.storageId) {
+          await ctx.storage.delete(parsed.replacedYjsStateStorageId as never);
+        }
+
+        return Response.json({
+          ok: true,
+          persistPath,
+          yjsBytes: persistedSnapshot?.byteLength ?? 0,
+          documentVersion: parsed.documentVersion ?? null,
+        });
+      } catch (error) {
+        if (persistedSnapshot?.storageId) {
+          await ctx.storage.delete(persistedSnapshot.storageId);
+        }
+        if (isWriteConflictError(error)) {
+          return Response.json({ ok: true, persistPath: 'concurrent_conflict_skipped' });
+        }
+        throw error;
+      }
+    }
+
     const markdownContent = body.markdownContent ?? '';
     const markdownBytes = markdownByteLength(markdownContent);
     if (markdownBytes > INLINE_REALTIME_MAX_BYTES) {
       await ctx.runMutation(internal.collab.storeDocumentOversized, {
-        mdFileId: body.mdFileId as never,
+        mdFileId: documentName as never,
         markdownBytes,
         source: 'http:storeDocument',
       });
@@ -131,7 +190,7 @@ http.route({
 
     try {
       const result = await ctx.runMutation(internal.collab.storeDocument, {
-        mdFileId: body.mdFileId as never,
+        mdFileId: documentName as never,
         markdownContent,
         yjsStateStorageId: persistedSnapshot?.storageId as never,
         normalized: body.normalized,
@@ -186,11 +245,20 @@ http.route({
       source?: string;
     };
 
-    await ctx.runMutation(internal.collab.storeDocumentOversized, {
-      mdFileId: body.mdFileId as never,
-      markdownBytes: Number.isFinite(body.markdownBytes) ? body.markdownBytes : 0,
-      source: body.source,
-    });
+    const documentName = body.mdFileId ?? '';
+    if (isShareDocumentName(documentName)) {
+      await ctx.runMutation(internal.anonShares.storeDocumentOversized, {
+        documentName,
+        markdownBytes: Number.isFinite(body.markdownBytes) ? body.markdownBytes : 0,
+        source: body.source,
+      });
+    } else {
+      await ctx.runMutation(internal.collab.storeDocumentOversized, {
+        mdFileId: documentName as never,
+        markdownBytes: Number.isFinite(body.markdownBytes) ? body.markdownBytes : 0,
+        source: body.source,
+      });
+    }
 
     return Response.json({ ok: true, persistPath: 'oversized' });
   }),
@@ -212,11 +280,55 @@ http.route({
       normalizedStrippedLeadingPlaceholders?: boolean;
     };
 
+    const documentName = body.mdFileId ?? '';
+    if (isShareDocumentName(documentName)) {
+      const persistedSnapshot = await persistSnapshotFromBase64(ctx, body.yjsState);
+
+      try {
+        const result = await ctx.runMutation(internal.anonShares.storeDocument, {
+          documentName,
+          markdownContent: body.markdownContent ?? '',
+          yjsStateStorageId: persistedSnapshot?.storageId as never,
+        });
+        const parsed = (
+          result as {
+            persistPath?: string;
+            replacedYjsStateStorageId?: string;
+            documentVersion?: string;
+          } | undefined
+        ) ?? {};
+        const persistPath = parsed.persistPath ?? 'normal';
+        const keepSnapshot = persistPath === 'normal' || persistPath === 'unchanged';
+
+        if (!keepSnapshot && persistedSnapshot?.storageId) {
+          await ctx.storage.delete(persistedSnapshot.storageId);
+        }
+        if (parsed.replacedYjsStateStorageId && parsed.replacedYjsStateStorageId !== persistedSnapshot?.storageId) {
+          await ctx.storage.delete(parsed.replacedYjsStateStorageId as never);
+        }
+
+        return Response.json({
+          ok: true,
+          persistPath,
+          yjsBytes: persistedSnapshot?.byteLength ?? 0,
+          documentVersion: parsed.documentVersion ?? null,
+        });
+      } catch (error) {
+        if (persistedSnapshot?.storageId) {
+          await ctx.storage.delete(persistedSnapshot.storageId);
+        }
+        if (isWriteConflictError(error)) {
+          return Response.json({ ok: true, persistPath: 'concurrent_conflict_skipped' });
+        }
+        throw error;
+      }
+    }
+
     const markdownContent = body.markdownContent ?? '';
     const markdownBytes = markdownByteLength(markdownContent);
     if (markdownBytes > INLINE_REALTIME_MAX_BYTES) {
       await ctx.runMutation(internal.collab.storeDocumentOversized, {
-        mdFileId: body.mdFileId as never,
+        mdFileId: documentName as never,
         markdownBytes,
         source: 'http:onAllDisconnected',
       });
@@ -227,7 +339,7 @@ http.route({
 
     try {
       const result = await ctx.runMutation(internal.collab.onAllDisconnected, {
-        mdFileId: body.mdFileId as never,
+        mdFileId: documentName as never,
         markdownContent,
         yjsStateStorageId: persistedSnapshot?.storageId as never,
         normalized: body.normalized,

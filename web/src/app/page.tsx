@@ -1,11 +1,73 @@
 'use client';
 
+import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import Link from 'next/link';
 
 import { useAuth } from '@/hooks/with-md/use-auth';
 
+function isMarkdownName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith('.md') || lower.endsWith('.markdown');
+}
+
 export default function Home() {
   const { loading, user, login } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [anonBusy, setAnonBusy] = useState(false);
+  const [anonMessage, setAnonMessage] = useState<string | null>(null);
+
+  const uploadAnonymousMarkdown = useCallback(async (file: File) => {
+    if (!isMarkdownName(file.name)) {
+      setAnonMessage('Only .md and .markdown files are supported.');
+      return;
+    }
+
+    setAnonBusy(true);
+    setAnonMessage(null);
+    try {
+      const content = await file.text();
+      const response = await fetch('/api/anon-share/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          content,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { editUrl?: string; error?: string }
+        | null;
+      if (!response.ok || !data?.editUrl) {
+        setAnonMessage(data?.error ?? 'Could not create share link.');
+        return;
+      }
+      window.location.href = data.editUrl;
+    } catch (error) {
+      setAnonMessage(error instanceof Error ? error.message : 'Could not create share link.');
+    } finally {
+      setAnonBusy(false);
+    }
+  }, []);
+
+  const onFileInputChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await uploadAnonymousMarkdown(file);
+    event.target.value = '';
+  }, [uploadAnonymousMarkdown]);
+
+  const onDrop = useCallback(async (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (anonBusy) return;
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    await uploadAnonymousMarkdown(file);
+  }, [anonBusy, uploadAnonymousMarkdown]);
+
+  const onOpenFilePicker = useCallback(() => {
+    if (anonBusy) return;
+    fileInputRef.current?.click();
+  }, [anonBusy]);
 
   return (
     <main className="withmd-bg withmd-page withmd-landing">
@@ -29,6 +91,28 @@ export default function Home() {
                     Login with GitHub
                   </button>
                 )}
+              </div>
+
+              <div
+                className={`withmd-anon-upload-zone ${anonBusy ? 'is-busy' : ''}`}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={onDrop}
+              >
+                <p className="withmd-anon-upload-title">No login? Share markdown instantly.</p>
+                <p className="withmd-anon-upload-sub">
+                  Drag one `.md` file here or upload it. You get a read link and an edit link.
+                </p>
+                <button type="button" className="withmd-anon-upload-btn" onClick={onOpenFilePicker} disabled={anonBusy}>
+                  {anonBusy ? 'Creating Share Link...' : 'Upload Markdown'}
+                </button>
+                {anonMessage ? <p className="withmd-anon-upload-message">{anonMessage}</p> : null}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".md,.markdown,text/markdown"
+                  className="withmd-hidden-input"
+                  onChange={onFileInputChange}
+                />
               </div>
 
               <hr className="withmd-landing-rule" />

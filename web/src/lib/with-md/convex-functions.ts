@@ -11,6 +11,9 @@ export const WITH_MD_CONVEX_FUNCTIONS = {
     pushQueueUnpushedCount: 'pushQueue:unpushedCount',
     pushQueueListByRepo: 'pushQueue:listByRepo',
     installationsGet: 'installations:get',
+    anonSharesGetPublic: 'anonShares:getPublic',
+    anonSharesCanEdit: 'anonShares:canEdit',
+    repoSharesResolve: 'repoShares:resolve',
   },
   mutations: {
     commentsCreate: 'comments:create',
@@ -38,5 +41,8 @@ export const WITH_MD_CONVEX_FUNCTIONS = {
     activitiesCreate: 'activities:create',
     usersUpsertFromGithub: 'users:upsertFromGithub',
     installationsUpsert: 'installations:upsert',
+    anonSharesCreate: 'anonShares:create',
+    anonSharesConsumeCreateQuota: 'anonShares:consumeCreateQuota',
+    repoSharesCreate: 'repoShares:create',
   },
 } as const;
