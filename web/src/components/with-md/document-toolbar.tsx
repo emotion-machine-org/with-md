@@ -54,7 +54,7 @@ function toggleTheme() {
   }
 }
 
-function cycleBackground() {
+function cycleBackground(): number {
   let current = 0;
   try {
     current = parseInt(localStorage.getItem('withmd-bg') ?? '0', 10) || 0;
@@ -68,6 +68,7 @@ function cycleBackground() {
   } catch (e) {
     /* noop */
   }
+  return next;
 }
 
 export default function DocumentToolbar({
@@ -128,6 +129,17 @@ export default function DocumentToolbar({
     await onCopyShareLink(mode);
     setShareMenuOpen(false);
   }, [onCopyShareLink, shareBusy]);
+
+  const onCycleBackground = useCallback(() => {
+    const next = cycleBackground();
+    if (!user?.userId) return;
+    void fetch('/api/user-preferences/background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bgIndex: next }),
+      keepalive: true,
+    });
+  }, [user?.userId]);
 
   return (
     <header className="withmd-dock-wrap">
@@ -202,7 +214,7 @@ export default function DocumentToolbar({
             ) : null}
           </div>
         )}
-        <button type="button" className="withmd-dock-btn" onClick={cycleBackground} aria-label="Change background">
+        <button type="button" className="withmd-dock-btn" onClick={onCycleBackground} aria-label="Change background">
           <ImageIcon />
           <span className="withmd-dock-tooltip">Change Background</span>
         </button>
