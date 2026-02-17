@@ -1,7 +1,9 @@
 # with.md — Final Implementation Plan (Web UI MVP)
 
 ## 1. Objective
+
 Build a desktop-first web UI for filesystem-first markdown collaboration that is:
+
 - Beautiful and calm (editorial, cinematic, graceful).
 - Fast in read mode, collaborative in rich-text edit mode.
 - Safe for real-world markdown with an always-editable Source mode.
@@ -10,7 +12,9 @@ Build a desktop-first web UI for filesystem-first markdown collaboration that is
 This plan is designed for one-pass agentic execution by Codex/Claude Code.
 
 ## 2. Locked Decisions
+
 These are fixed and implemented as constraints:
+
 - Source mode is editable.
 - Approximate comment recovery is acceptable when CRDT anchors are unavailable.
 - Unsupported markdown syntax may fall back to Source mode.
@@ -18,7 +22,9 @@ These are fixed and implemented as constraints:
 - One global visual theme for MVP.
 
 ## 3. MVP Scope
+
 In scope:
+
 - File list + document page with three modes:
   - `Read` (rendered markdown, no Hocuspocus connection)
   - `Edit` (TipTap + Yjs + Hocuspocus)
@@ -30,42 +36,51 @@ In scope:
 - Syntax safety gate (supported -> Edit allowed; unsupported -> Source default).
 
 Out of scope for MVP:
+
 - Full mobile UX parity.
 - PR/branch workflows.
 - Perfect round-trip fidelity for every markdown dialect.
 - Rich MDX/custom directive visual editing.
 
 ## 4. Product Behavior (User Flows)
+
 ### 4.1 Open a file
+
 1. User opens markdown file.
 2. App renders `Read` mode immediately from backend markdown string.
 3. App shows comments in sidebar (using best-known anchor data).
 4. App runs syntax compatibility check.
 
 ### 4.2 Enter rich collaborative editing
+
 1. User clicks editor surface or `Edit` toggle.
 2. If syntax supported, app initializes Yjs + IndexedDB + Hocuspocus + TipTap.
 3. User edits with presence cursors.
 4. Debounced persistence updates backend markdown + Yjs state.
 
 ### 4.3 Enter Source mode
+
 1. User toggles `Source`.
 2. Source textarea/CodeMirror is editable.
 3. User can `Apply to doc` (for supported files) or `Save source` (unsupported files).
 4. For supported files, apply action reparses markdown into TipTap doc.
 
 ### 4.4 Add comment
+
 1. User selects text in Edit mode.
 2. App sets custom comment mark with `commentMarkId`.
 3. App stores metadata in backend with anchor snapshot.
 4. Sidebar updates in realtime.
 
 ### 4.5 Recover comments after CRDT reset
+
 1. If mark missing, app attempts reattach using quote/context/heading/line heuristics.
 2. If not found, comment still shows in sidebar with approximate location.
 
 ## 5. Frontend Architecture
+
 ## 5.1 State machine
+
 Use a strict UI mode state:
 
 ```ts
@@ -80,13 +95,16 @@ interface DocState {
 ```
 
 Rules:
+
 - `read -> edit` only if `syntaxSupported === true`.
 - `read -> source` always allowed.
 - `source` is always editable.
 - `edit <-> source` allowed, but source changes require explicit apply/save action.
 
 ## 5.2 Global visual theme
+
 Use one theme matching the provided mood and screenshot:
+
 - Background image: `background_0.jpeg` (default global).
 - Dark translucent content card.
 - Serif heading for document title and section heads.
@@ -94,7 +112,9 @@ Use one theme matching the provided mood and screenshot:
 - Low-saturation accent colors for comments/activity badges.
 
 ## 5.3 Data boundaries
+
 Frontend only depends on explicit backend contracts:
+
 - File content and metadata.
 - Comments CRUD + suggestions + activity feed.
 - Collaboration auth/load/store/disconnect endpoints for Hocuspocus.
@@ -103,6 +123,7 @@ Frontend only depends on explicit backend contracts:
 No frontend assumptions about git internals.
 
 ## 6. Backend Contract (Frontend-facing)
+
 Use Convex functions directly in the web app (HTTP only for Hocuspocus hooks):
 
 ```ts
@@ -138,6 +159,7 @@ POST /api/collab/onAllDisconnected
 ```
 
 ## 7. File Plan (Web App)
+
 Create this module inside existing Next app:
 
 ```text
@@ -175,6 +197,7 @@ web/public/with-md/backgrounds/background_0.jpeg
 ```
 
 ## 8. Dependencies
+
 From `web/`:
 
 ```bash
@@ -227,6 +250,7 @@ export interface CommentRecord {
 ```
 
 ## 10. Syntax Safety Gate
+
 Implement deterministic safety detection before enabling TipTap Edit mode.
 
 ```ts
@@ -252,11 +276,13 @@ export function detectUnsupportedSyntax(md: string): {
 ```
 
 Behavior:
+
 - `supported=true`: user can choose Read/Edit/Source.
 - `supported=false`: default to Source with non-blocking warning banner.
 - Backend should persist parse compatibility (`syntaxSupportStatus`) so UI can skip repeated expensive checks.
 
 ## 11. TipTap Comment Mark (Custom)
+
 Use custom mark, not TipTap Comments extension, to avoid markdown-conversion fragility.
 
 ```ts
@@ -318,24 +344,30 @@ export function useCollabDoc(params: {
 ```
 
 ## 13. Source Mode (Editable)
+
 For MVP simplicity and safety:
+
 - Source mode has its own editable buffer.
 - Changes are explicit via buttons.
 - No hidden autosync between source textarea and live TipTap doc.
 
 Buttons:
+
 - `Apply to Edit Doc` (supported files, reparses markdown into TipTap content).
 - `Save Source` (uses `mdFiles.saveSource`, writes markdown directly to Convex and queues push item).
 - `Discard Source Changes`.
 
 ## 14. Comment Anchor Snapshot + Recovery
+
 When creating comment, capture:
+
 - selected quote
 - 32-char prefix and suffix context
 - heading path at selection
 - fallback line number
 
 Recovery order:
+
 1. Find exact `textQuote` unique match.
 2. If multiple matches, score by prefix/suffix proximity.
 3. If no match, restrict search to `headingPath` section and retry.
@@ -366,7 +398,9 @@ export function recoverAnchor(md: string, anchor: CommentAnchorSnapshot): {start
 ```
 
 ## 15. Markdown Fidelity Guard (Client + Backend)
+
 Rules:
+
 - Preserve original markdown when there is no meaningful semantic change.
 - Prevent noisy diffs from pure serializer normalization.
 
@@ -388,7 +422,9 @@ export function hasMeaningfulDiff(nextMd: string, prevMd: string): boolean {
 Use this guard before patching canonical `mdFile.content`.
 
 ## 16. UI Composition
+
 Layout (desktop-first):
+
 - Full-screen scenic background + dark vignette overlay.
 - Center document panel (`max-width: 940px`) with glass effect.
 - Right sidebar for comments/activity.
@@ -420,6 +456,7 @@ Style tokens (`web/src/styles/with-md.css`):
 ```
 
 ## 17. Implementation Steps (One-pass Order)
+
 Execute in this order:
 
 1. Create module skeleton files listed in Section 7.
@@ -439,7 +476,9 @@ Execute in this order:
 15. Add test suite and run checks.
 
 ## 18. Acceptance Criteria
+
 Functional:
+
 - File opens in read mode instantly.
 - Source mode is always editable.
 - Supported files can enter collaborative edit mode with cursors.
@@ -449,28 +488,34 @@ Functional:
 - Push/resync actions visible and invokable.
 
 Quality:
+
 - No crashes when switching modes repeatedly.
 - No data loss in browser refresh while editing (IndexedDB recovery).
 - Noise-only markdown changes are reduced by meaningful-diff guard.
 
 ## 19. Testing Plan
+
 Unit tests:
+
 - `syntax.ts`: markdown feature detection.
 - `anchor.ts`: quote/context/heading-based recovery logic.
 - `markdown-diff.ts`: semantic-diff guard.
 
 Integration tests (component-level):
+
 - mode transitions `read -> edit -> source -> edit`.
 - source apply flow updates editor document.
 - comment create and sidebar highlight linking.
 
 Manual checks:
+
 - Open 10 representative markdown docs.
 - Verify supported vs unsupported routing.
 - Verify comment behavior with and without active collab session.
 - Verify push and resync button states.
 
 ## 20. Risks and Mitigations
+
 Risk: TipTap markdown conversion normalizes formatting.
 Mitigation: semantic-diff guard + source mode fallback.
 
@@ -484,7 +529,9 @@ Risk: source/edit mode conflicts.
 Mitigation: explicit apply/save actions; avoid hidden dual-write behavior.
 
 ## 21. Deliverables
+
 At end of one-pass implementation, agent should produce:
+
 - Working `/with-md` route in `web` app.
 - Read/Edit/Source modes with required behavior.
 - Comment sidebar with anchored mark flow.
@@ -492,8 +539,11 @@ At end of one-pass implementation, agent should produce:
 - Tests passing for core utilities and mode transitions.
 
 ## 22. References
-- TipTap Markdown docs: https://tiptap.dev/docs/editor/markdown
-- TipTap Markdown custom serialization: https://tiptap.dev/docs/editor/markdown/advanced-usage/custom-serializing
-- TipTap comments overview: https://tiptap.dev/docs/comments/getting-started/overview
-- Peritext paper: https://www.inkandswitch.com/peritext/
-- Loro rich text article: https://loro.dev/blog/loro-richtext
+
+- TipTap Markdown docs: [https://tiptap.dev/docs/editor/markdown](https://tiptap.dev/docs/editor/markdown)
+- TipTap Markdown custom serialization: [https://tiptap.dev/docs/editor/markdown/advanced-usage/custom-serializing](https://tiptap.dev/docs/editor/markdown/advanced-usage/custom-serializing)
+- TipTap comments overview: [https://tiptap.dev/docs/comments/getting-started/overview](https://tiptap.dev/docs/comments/getting-started/overview)
+- Peritext paper: [https://www.inkandswitch.com/peritext/](https://www.inkandswitch.com/peritext/)
+- Loro rich text article: [https://loro.dev/blog/loro-richtext](https://loro.dev/blog/loro-richtext)
+
+&nbsp;
