@@ -16,6 +16,7 @@ export default defineSchema({
     owner: v.string(),
     name: v.string(),
     defaultBranch: v.string(),
+    activeBranch: v.optional(v.string()),
     lastSyncedCommitSha: v.optional(v.string()),
     syncStatus: v.string(),
   })

@@ -11,6 +11,7 @@ interface RepoDoc {
   owner: string;
   name: string;
   defaultBranch: string;
+  activeBranch?: string;
 }
 
 interface InstallationDoc {
@@ -60,11 +61,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch current HEAD to get parent commit and base tree
+    const effectiveBranch = repo.activeBranch || repo.defaultBranch;
     const tree = await fetchMdTree(
       installation.githubInstallationId,
       repo.owner,
       repo.name,
-      repo.defaultBranch,
+      effectiveBranch,
     );
 
     // Deduplicate: keep latest content per path
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest) {
       installation.githubInstallationId,
       repo.owner,
       repo.name,
-      repo.defaultBranch,
+      effectiveBranch,
       tree.commitSha,
       tree.treeSha,
       files,

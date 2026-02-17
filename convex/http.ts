@@ -46,16 +46,16 @@ function decodeBase64ToUint8Array(value: string): Uint8Array | null {
 async function persistSnapshotFromBase64(
   ctx: { storage: { store: (blob: Blob) => Promise<unknown> } },
   yjsState?: string,
-) {
+): Promise<{ storageId: string; byteLength: number } | null> {
   const encoded = typeof yjsState === 'string' ? yjsState : '';
   if (!encoded) return null;
 
   const bytes = decodeBase64ToUint8Array(encoded);
   if (!bytes || bytes.byteLength === 0) return null;
 
-  const storageId = await ctx.storage.store(new Blob([bytes], { type: 'application/octet-stream' }));
+  const storageId = await ctx.storage.store(new Blob([bytes as unknown as Uint8Array<ArrayBuffer>], { type: 'application/octet-stream' }));
   return {
-    storageId,
+    storageId: storageId as string,
     byteLength: bytes.byteLength,
   };
 }

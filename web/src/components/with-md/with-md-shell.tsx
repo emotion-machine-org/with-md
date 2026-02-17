@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import BranchSwitcher from '@/components/with-md/branch-switcher';
 import CommentsSidebar from '@/components/with-md/comments-sidebar';
 import DocumentSurface from '@/components/with-md/document-surface';
 import DocumentToolbar from '@/components/with-md/document-toolbar';
@@ -146,6 +147,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [importProcessing, setImportProcessing] = useState(false);
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const [formatBarOpen, setFormatBarOpen] = useState(false);
+  const [branchSwitcherOpen, setBranchSwitcherOpen] = useState(false);
   const [peerCount, setPeerCount] = useState(0);
   const pendingGitHubPaths = useMemo(() => {
     const merged = new Set(queuedGitHubPaths);
@@ -154,6 +156,9 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     }
     return merged;
   }, [queuedGitHubPaths, localEditedPaths]);
+
+  const activeRepo = repos.find((r) => r.repoId === activeRepoId);
+  const currentBranch = activeRepo?.activeBranch || activeRepo?.defaultBranch || 'main';
 
   const setUrlForSelection = useCallback((nextRepoId: string, nextPath?: string, mode: 'push' | 'replace' = 'push') => {
     if (typeof window === 'undefined') return;
@@ -670,6 +675,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     }
 
     try {
+      const activeBranch = repo.activeBranch || undefined;
       const res = await fetch('/api/github/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -679,6 +685,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
           repo: repo.name,
           defaultBranch: repo.defaultBranch,
           githubRepoId: repo.githubRepoId,
+          activeBranch,
         }),
       });
       if (!res.ok) {
@@ -686,7 +693,8 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         throw new Error(data.error ?? 'Sync failed');
       }
       const data = (await res.json()) as { filesCount: number };
-      setStatusMessage(`Re-synced ${data.filesCount} file(s) from GitHub.`);
+      const branchLabel = activeBranch || repo.defaultBranch;
+      setStatusMessage(`Re-synced ${data.filesCount} file(s) from ${branchLabel}.`);
 
       // Reload files
       const loadedFiles = await reloadFiles();
@@ -703,6 +711,56 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     }
     await reloadActivity();
   }, [activeRepoId, repos, currentFile, reloadActivity, reloadFiles]);
+
+  const onBranchSwitch = useCallback(async (branchName: string) => {
+    if (!activeRepoId) return;
+    const repo = repos.find((r) => r.repoId === activeRepoId);
+    if (!repo || !repo.githubInstallationId || !repo.githubRepoId || !repo.defaultBranch) return;
+
+    const activeBranch = branchName === repo.defaultBranch ? undefined : branchName;
+    setStatusMessage(`Switching to branch ${branchName}...`);
+
+    try {
+      const res = await fetch('/api/github/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          installationId: repo.githubInstallationId,
+          owner: repo.owner,
+          repo: repo.name,
+          defaultBranch: repo.defaultBranch,
+          githubRepoId: repo.githubRepoId,
+          activeBranch,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? 'Branch switch failed');
+      }
+      const data = (await res.json()) as { filesCount: number };
+
+      // Reload repos to pick up updated activeBranch
+      const loadedRepos = await api.listRepos();
+      setRepos(loadedRepos);
+
+      // Reload files
+      const loadedFiles = await reloadFiles();
+
+      // Reset to first file on the new branch
+      const firstFile = loadedFiles[0] ?? null;
+      setCurrentFileContext(firstFile);
+      if (firstFile) {
+        const loadedComments = await api.listCommentsByFile(firstFile.mdFileId);
+        setComments(loadedComments);
+        setUrlForSelection(activeRepoId, firstFile.path, 'replace');
+      }
+
+      setStatusMessage(`Switched to ${branchName} (${data.filesCount} files).`);
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : 'Branch switch failed.');
+    }
+    await reloadActivity();
+  }, [activeRepoId, repos, reloadActivity, reloadFiles, setCurrentFileContext, setUrlForSelection]);
 
   const openImportReviewFromFileList = useCallback(async (fileList: FileList) => {
     const dropped = Array.from(fileList);
@@ -960,6 +1018,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                 pendingPaths={pendingGitHubPaths}
                 activeRepo={repos.find((r) => r.repoId === activeRepoId)}
                 onOpenRepoPicker={onOpenRepoPicker}
+                onOpenBranchSwitcher={activeRepo?.githubInstallationId ? () => setBranchSwitcherOpen(true) : undefined}
                 onSelectPath={(path) => {
                   if (path === currentFile.path) return;
                   void selectFileByPath(path, { updateUrl: true, historyMode: 'push' });
@@ -1163,6 +1222,17 @@ export default function WithMdShell({ repoId, filePath }: Props) {
             <RepoPicker onSelect={onRepoPickerSelect} />
           </div>
         </div>
+      )}
+      {branchSwitcherOpen && activeRepo?.githubInstallationId && activeRepo.defaultBranch && (
+        <BranchSwitcher
+          installationId={activeRepo.githubInstallationId}
+          owner={activeRepo.owner}
+          repo={activeRepo.name}
+          defaultBranch={activeRepo.defaultBranch}
+          currentBranch={currentBranch}
+          onSwitch={(branch) => void onBranchSwitch(branch)}
+          onClose={() => setBranchSwitcherOpen(false)}
+        />
       )}
     </main>
   );
