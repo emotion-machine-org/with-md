@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 
 import type { BranchInfo } from '@/lib/with-md/github';
 import type { RepoInfo } from '@/lib/with-md/github';
@@ -17,7 +18,9 @@ export default function RepoPicker({ onSelect }: Props) {
   const [expandedRepo, setExpandedRepo] = useState<RepoInfo | null>(null);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
+  const [listScrollbarWidth, setListScrollbarWidth] = useState(0);
   const mountedRef = useRef(true);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -59,6 +62,29 @@ export default function RepoPicker({ onSelect }: Props) {
       controller.abort();
     };
   }, []);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    const updateScrollbarWidth = () => {
+      const nextWidth = Math.max(0, list.offsetWidth - list.clientWidth);
+      setListScrollbarWidth(nextWidth);
+    };
+
+    updateScrollbarWidth();
+
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      updateScrollbarWidth();
+    });
+    observer.observe(list);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [repos.length, expandedRepo?.githubRepoId, loadingBranches]);
 
   const handleRepoClick = useCallback(
     async (repo: RepoInfo) => {
@@ -175,7 +201,11 @@ export default function RepoPicker({ onSelect }: Props) {
         </div>
       ) : (
         <>
-          <div className="withmd-repo-picker-list">
+          <div
+            ref={listRef}
+            className="withmd-repo-picker-list"
+            style={{ '--withmd-repo-picker-list-scrollbar-width': `${listScrollbarWidth}px` } as CSSProperties}
+          >
             {repos.map((repo) => {
               const isSyncing = syncing === repo.fullName;
               const isExpanded = expandedRepo?.githubRepoId === repo.githubRepoId;
