@@ -133,11 +133,25 @@ export const restoreFallbackFiles = mutation({
 });
 
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { userId: v.optional(v.id('users')) },
+  handler: async (ctx, args) => {
+    let installationIds: Set<string> | null = null;
+
+    if (args.userId) {
+      const userInstallations = await ctx.db
+        .query('installations')
+        .withIndex('by_connected_user', (q) => q.eq('connectedBy', args.userId))
+        .collect();
+      installationIds = new Set(userInstallations.map((i) => i._id));
+    }
+
     const repos = await ctx.db.query('repos').collect();
+    const filtered = installationIds
+      ? repos.filter((repo) => installationIds.has(repo.installationId))
+      : repos;
+
     const enriched = await Promise.all(
-      repos.map(async (repo) => {
+      filtered.map(async (repo) => {
         const installation = await ctx.db.get(repo.installationId);
         return {
           ...repo,

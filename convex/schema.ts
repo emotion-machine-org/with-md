@@ -8,7 +8,10 @@ export default defineSchema({
     githubAccountType: v.string(),
     accessToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
-  }).index('by_github_installation_id', ['githubInstallationId']),
+    connectedBy: v.optional(v.id('users')),
+  })
+    .index('by_github_installation_id', ['githubInstallationId'])
+    .index('by_connected_user', ['connectedBy']),
 
   repos: defineTable({
     installationId: v.id('installations'),

@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
       githubInstallationId: body.installationId,
       githubAccountLogin: body.accountLogin ?? body.owner,
       githubAccountType: body.accountType ?? 'User',
+      connectedBy: session.userId,
     });
 
     // Upsert repo

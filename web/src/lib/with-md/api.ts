@@ -100,7 +100,7 @@ interface WithMdPushQueueRow {
 }
 
 export interface WithMdApi {
-  listRepos(): Promise<RepoSummary[]>;
+  listRepos(userId?: string): Promise<RepoSummary[]>;
   listFilesByRepo(repoId: string): Promise<MdFile[]>;
   listQueuedPaths(repoId: string): Promise<string[]>;
   resolveByPath(repoId: string, path: string): Promise<MdFile | null>;
@@ -242,8 +242,10 @@ async function mutateConvex<T>(name: string, args: Record<string, unknown>): Pro
 }
 
 const convexApi: WithMdApi = {
-  async listRepos() {
-    const rows = await queryConvex<WithMdRepoRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.reposList, {});
+  async listRepos(userId?: string) {
+    const args: Record<string, unknown> = {};
+    if (userId) args.userId = userId;
+    const rows = await queryConvex<WithMdRepoRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.reposList, args);
     return rows.map(mapRepo);
   },
 
