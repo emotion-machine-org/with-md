@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex, queryConvex } from '@/lib/with-md/convex-client';
-import { createCommitWithFiles, fetchMdTree } from '@/lib/with-md/github';
+import { createCommitWithFiles, fetchMdTree, getInstallationToken, getRepoInstallationId } from '@/lib/with-md/github';
 import { getSessionOrNull } from '@/lib/with-md/session';
 
 interface RepoDoc {
@@ -44,12 +44,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Repo not found' }, { status: 404 });
     }
 
-    // Get installation
+    // Get installation; resolve fresh from GitHub if the stored ID is stale
     const installation = await queryConvex<InstallationDoc | null>(F.queries.installationsGet, {
       installationId: repo.installationId as never,
     });
-    if (!installation) {
-      return NextResponse.json({ error: 'Installation not found' }, { status: 404 });
+    let ghInstallationId = installation?.githubInstallationId;
+    if (ghInstallationId) {
+      try {
+        await getInstallationToken(ghInstallationId);
+      } catch {
+        ghInstallationId = await getRepoInstallationId(repo.owner, repo.name);
+      }
+    } else {
+      ghInstallationId = await getRepoInstallationId(repo.owner, repo.name);
     }
 
     // Get queued push items
@@ -69,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     // Fetch current HEAD to get parent commit and base tree
     const tree = await fetchMdTree(
-      installation.githubInstallationId,
+      ghInstallationId,
       repo.owner,
       repo.name,
       effectiveBranch,
@@ -89,7 +96,7 @@ export async function POST(req: NextRequest) {
 
     // Create the commit
     const { commitSha } = await createCommitWithFiles(
-      installation.githubInstallationId,
+      ghInstallationId,
       repo.owner,
       repo.name,
       effectiveBranch,
