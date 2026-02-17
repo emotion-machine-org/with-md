@@ -187,7 +187,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
     async function bootstrap() {
       try {
-        const loadedRepos = await api.listRepos();
+        const loadedRepos = await api.listRepos(user?.userId);
         if (!active) return;
         setRepos(loadedRepos);
 
@@ -740,7 +740,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
       const data = (await res.json()) as { filesCount: number };
 
       // Reload repos to pick up updated activeBranch
-      const loadedRepos = await api.listRepos();
+      const loadedRepos = await api.listRepos(user?.userId);
       setRepos(loadedRepos);
 
       // Reload files

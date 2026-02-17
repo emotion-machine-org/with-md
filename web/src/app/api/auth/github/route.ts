@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const clientId = process.env.GITHUB_CLIENT_ID;
   if (!clientId) {
     return NextResponse.json({ error: 'Missing GITHUB_CLIENT_ID' }, { status: 500 });
@@ -18,8 +18,13 @@ export async function GET() {
     path: '/',
   });
 
+  const host = req.headers.get('host') ?? 'localhost:4040';
+  const protocol = host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https';
+  const redirectUri = `${protocol}://${host}/api/auth/github/callback`;
+
   const params = new URLSearchParams({
     client_id: clientId,
+    redirect_uri: redirectUri,
     state,
     scope: '',
   });

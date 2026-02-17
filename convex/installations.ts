@@ -6,6 +6,7 @@ export const upsert = mutation({
     githubInstallationId: v.number(),
     githubAccountLogin: v.string(),
     githubAccountType: v.string(),
+    connectedBy: v.optional(v.id('users')),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -19,6 +20,7 @@ export const upsert = mutation({
       await ctx.db.patch(existing._id, {
         githubAccountLogin: args.githubAccountLogin,
         githubAccountType: args.githubAccountType,
+        ...(args.connectedBy ? { connectedBy: args.connectedBy } : {}),
       });
       return existing._id;
     }
@@ -27,6 +29,7 @@ export const upsert = mutation({
       githubInstallationId: args.githubInstallationId,
       githubAccountLogin: args.githubAccountLogin,
       githubAccountType: args.githubAccountType,
+      connectedBy: args.connectedBy,
     });
   },
 });

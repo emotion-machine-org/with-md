@@ -10,17 +10,18 @@ import { getWithMdApi } from '@/lib/with-md/api';
 const api = getWithMdApi();
 
 export default function WithMdPage() {
-  const { loading: authLoading } = useAuth();
+  const { loading: authLoading, user } = useAuth();
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
   const [checkingExisting, setCheckingExisting] = useState(true);
 
-  // Check if there's already a real (non-seed) synced repo
+  // Check if there's already a real (non-seed) synced repo for this user
   useEffect(() => {
+    if (authLoading || !user) return;
     let active = true;
 
     async function check() {
       try {
-        const repos = await api.listRepos();
+        const repos = await api.listRepos(user!.userId);
         if (!active) return;
         // Only auto-select repos that came from a real GitHub sync (githubRepoId > 0)
         const realRepo = repos.find((r) => r.githubRepoId && r.githubRepoId > 0);
@@ -40,7 +41,7 @@ export default function WithMdPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [authLoading, user]);
 
   const handleRepoSelect = useCallback((result: { repoId: string }) => {
     setSelectedRepoId(result.repoId);
