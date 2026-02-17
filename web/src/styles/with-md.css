@@ -1321,6 +1321,23 @@
   padding: var(--withmd-repo-picker-gutter, 32px);
 }
 
+.withmd-repo-picker-footer {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.withmd-btn-green {
+  background: #22863a;
+  border-color: #2ea04366;
+  color: #fff;
+}
+
+.withmd-btn-green:hover {
+  background: #2ea043;
+  color: #fff;
+}
+
 .withmd-repo-picker-list {
   display: flex;
   flex-direction: column;

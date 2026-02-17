@@ -129,34 +129,46 @@ export default function RepoPicker({ onSelect }: Props) {
           </div>
         </div>
       ) : (
-        <div className="withmd-repo-picker-list">
-          {repos.map((repo) => {
-            const isSyncing = syncing === repo.fullName;
-            return (
-              <button
-                key={repo.githubRepoId}
-                type="button"
-                className="withmd-repo-row"
-                disabled={syncing !== null}
-                onClick={() => void handleSelect(repo)}
-                style={{
-                  opacity: syncing && !isSyncing ? 0.4 : 1,
-                  cursor: syncing ? 'wait' : 'pointer',
-                }}
-              >
-                <span className="withmd-repo-name">{repo.fullName}</span>
-                {repo.isPrivate && (
-                  <span className="withmd-repo-badge">private</span>
-                )}
-                {isSyncing && (
-                  <span className="withmd-muted-xs" style={{ marginLeft: 'auto' }}>
-                    Syncing...
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <>
+          <div className="withmd-repo-picker-list">
+            {repos.map((repo) => {
+              const isSyncing = syncing === repo.fullName;
+              return (
+                <button
+                  key={repo.githubRepoId}
+                  type="button"
+                  className="withmd-repo-row"
+                  disabled={syncing !== null}
+                  onClick={() => void handleSelect(repo)}
+                  style={{
+                    opacity: syncing && !isSyncing ? 0.4 : 1,
+                    cursor: syncing ? 'wait' : 'pointer',
+                  }}
+                >
+                  <span className="withmd-repo-name">{repo.fullName}</span>
+                  {repo.isPrivate && (
+                    <span className="withmd-repo-badge">private</span>
+                  )}
+                  {isSyncing && (
+                    <span className="withmd-muted-xs" style={{ marginLeft: 'auto' }}>
+                      Syncing...
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div className="withmd-repo-picker-footer">
+            <a
+              href="https://github.com/apps/with-md/installations/new"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="withmd-btn withmd-btn-green"
+            >
+              Missing repos?
+            </a>
+          </div>
+        </>
       )}
     </div>
   );
