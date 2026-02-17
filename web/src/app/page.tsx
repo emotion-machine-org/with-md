@@ -158,7 +158,7 @@ export default function Home() {
                 {loading ? (
                   <span className="withmd-muted-xs">Loading...</span>
                 ) : user ? (
-                  <Link href="/with-md" className="withmd-btn-landing withmd-btn-landing-bright">
+                  <Link href="/with-md" className="withmd-btn-landing">
                     Open Workspace
                   </Link>
                 ) : (

@@ -106,7 +106,6 @@
 [data-bg="8"] { --withmd-bg-image: url('/backgrounds/background_8.webp'); }
 [data-bg="9"] { --withmd-bg-image: url('/backgrounds/background_9.webp'); }
 [data-bg="10"] { --withmd-bg-image: url('/backgrounds/background_10.webp'); }
-[data-bg="11"] { --withmd-bg-image: url('/backgrounds/background_11.webp'); }
 
 .withmd-page {
   min-height: 100vh;
@@ -816,18 +815,31 @@
 }
 
 .withmd-btn-landing {
-  background: #d8d6d1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #eceae5;
   color: #1c1917;
   border: 0;
   border-radius: 999px;
   padding: 12px 32px;
+  min-height: 44px;
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 15px;
+  line-height: 1;
   font-weight: 400;
   cursor: pointer;
-  transition: background 160ms ease;
+  transition: background 160ms ease, color 160ms ease;
 }
 .withmd-btn-landing:hover {
-  background: #c3c0b8;
+  background: #ddd9d1;
+}
+
+.withmd-btn-landing:visited {
+  color: #1c1917;
 }
 
 .withmd-btn-landing:disabled {
@@ -835,12 +847,17 @@
   cursor: default;
 }
 
-.withmd-btn-landing-bright {
-  background: #f4f4f3;
+[data-theme="light"] .withmd-btn-landing {
+  background: var(--withmd-text);
+  color: var(--withmd-panel);
 }
 
-.withmd-btn-landing-bright:hover {
-  background: #e4e3df;
+[data-theme="light"] .withmd-btn-landing:hover {
+  background: color-mix(in srgb, var(--withmd-text) 88%, white);
+}
+
+[data-theme="light"] .withmd-btn-landing:visited {
+  color: var(--withmd-panel);
 }
 
 .withmd-btn-landing-upload {
@@ -850,6 +867,15 @@
 
 .withmd-btn-landing-upload:hover {
   background: #4a4a4a;
+}
+
+[data-theme="light"] .withmd-btn-landing-upload {
+  background: rgba(28, 25, 23, 0.76);
+  color: rgba(250, 249, 247, 0.92);
+}
+
+[data-theme="light"] .withmd-btn-landing-upload:hover {
+  background: rgba(28, 25, 23, 0.66);
 }
 
 .withmd-landing-drop-hints {
@@ -1038,6 +1064,18 @@
   background: color-mix(in srgb, var(--withmd-panel) 62%, transparent);
   color: rgba(245, 245, 244, 0.96);
   text-decoration-color: rgba(245, 245, 244, 0.88);
+}
+
+[data-theme="light"] .withmd-landing-landscape-toggle {
+  background: color-mix(in srgb, var(--withmd-panel) 84%, transparent);
+  color: rgba(28, 25, 23, 0.86);
+  text-decoration-color: rgba(28, 25, 23, 0.56);
+}
+
+[data-theme="light"] .withmd-landing-landscape-toggle:hover {
+  background: color-mix(in srgb, var(--withmd-panel) 94%, transparent);
+  color: rgba(28, 25, 23, 0.96);
+  text-decoration-color: rgba(28, 25, 23, 0.86);
 }
 
 .withmd-anon-upload-zone {

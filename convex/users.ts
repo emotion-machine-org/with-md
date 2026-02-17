@@ -47,7 +47,7 @@ export const setBackground = mutation({
     bgIndex: v.number(),
   },
   handler: async (ctx, args) => {
-    if (args.bgIndex < 0 || args.bgIndex > 11) {
+    if (args.bgIndex < 0 || args.bgIndex > 10) {
       throw new Error('bgIndex out of range');
     }
     const existing = await ctx.db.get(args.userId);
