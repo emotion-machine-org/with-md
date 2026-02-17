@@ -73,6 +73,26 @@ export async function getInstallationToken(installationId: number): Promise<stri
   return data.token;
 }
 
+// ---------- Resolve installation for a repo ----------
+
+export async function getRepoInstallationId(owner: string, repo: string): Promise<number> {
+  const jwt = await createAppJwt();
+  const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/installation`, {
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      Accept: 'application/vnd.github+json',
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Failed to get installation for ${owner}/${repo}: ${res.status} ${body}`);
+  }
+
+  const data = (await res.json()) as { id: number };
+  return data.id;
+}
+
 // ---------- User-level API calls ----------
 
 interface Installation {

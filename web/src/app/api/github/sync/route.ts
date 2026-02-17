@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex } from '@/lib/with-md/convex-client';
-import { fetchBlobContent, fetchMdTree } from '@/lib/with-md/github';
+import { fetchBlobContent, fetchMdTree, getInstallationToken, getRepoInstallationId } from '@/lib/with-md/github';
 import { getSessionOrNull } from '@/lib/with-md/session';
 
 function categorizeFile(path: string): string {
@@ -33,9 +33,21 @@ export async function POST(req: NextRequest) {
   };
 
   try {
+    // Validate the provided installationId; resolve fresh from GitHub if stale
+    let ghInstallationId = body.installationId;
+    if (ghInstallationId) {
+      try {
+        await getInstallationToken(ghInstallationId);
+      } catch {
+        ghInstallationId = await getRepoInstallationId(body.owner, body.repo);
+      }
+    } else {
+      ghInstallationId = await getRepoInstallationId(body.owner, body.repo);
+    }
+
     // Upsert installation
     const installationId = await mutateConvex<string>(F.mutations.installationsUpsert, {
-      githubInstallationId: body.installationId,
+      githubInstallationId: ghInstallationId,
       githubAccountLogin: body.accountLogin ?? body.owner,
       githubAccountType: body.accountType ?? 'User',
       connectedBy: session.userId,
@@ -60,7 +72,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Fetch .md tree from GitHub
-    const tree = await fetchMdTree(body.installationId, body.owner, body.repo, effectiveBranch);
+    const tree = await fetchMdTree(ghInstallationId, body.owner, body.repo, effectiveBranch);
 
     // Fetch blob contents in batches of 10
     const BATCH_SIZE = 10;
@@ -69,7 +81,7 @@ export async function POST(req: NextRequest) {
     for (let i = 0; i < tree.files.length; i += BATCH_SIZE) {
       const batch = tree.files.slice(i, i + BATCH_SIZE);
       const contents = await Promise.all(
-        batch.map((f) => fetchBlobContent(body.installationId, body.owner, body.repo, f.sha)),
+        batch.map((f) => fetchBlobContent(ghInstallationId, body.owner, body.repo, f.sha)),
       );
 
       for (let j = 0; j < batch.length; j++) {
