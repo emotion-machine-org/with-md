@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 
 import type { Editor } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
@@ -427,6 +428,7 @@ export default function CollabEditor({
   });
   const lastLocalMarkdownRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [editorScrollbarWidth, setEditorScrollbarWidth] = useState(0);
   const [railTick, setRailTick] = useState(0);
   const [replyDraftByThread, setReplyDraftByThread] = useState<Record<string, string>>({});
   const [replyingThreadId, setReplyingThreadId] = useState<string | null>(null);
@@ -812,6 +814,29 @@ export default function CollabEditor({
     };
   }, [editor]);
 
+  useEffect(() => {
+    const scrollEl = scrollContainerRef.current;
+    if (!scrollEl) return;
+
+    const updateScrollbarWidth = () => {
+      const nextWidth = Math.max(0, scrollEl.offsetWidth - scrollEl.clientWidth);
+      setEditorScrollbarWidth(nextWidth);
+    };
+
+    updateScrollbarWidth();
+
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      updateScrollbarWidth();
+    });
+    observer.observe(scrollEl);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [editor]);
+
   const getTopForDocPos = useCallback((docPos: number): number => {
     if (!editor) return 0;
     const scrollEl = scrollContainerRef.current;
@@ -932,7 +957,11 @@ export default function CollabEditor({
       {showStatus && <div className="withmd-muted-xs">{reason}</div>}
       <div className="withmd-editor-shell withmd-column withmd-fill">
         {formatBarOpen && <FormatToolbar editor={editor} />}
-        <div ref={scrollContainerRef} className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill">
+        <div
+          ref={scrollContainerRef}
+          className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill"
+          style={{ '--withmd-editor-scrollbar-width': `${editorScrollbarWidth}px` } as CSSProperties}
+        >
           <EditorContent editor={editor} />
         </div>
         {hasPositionedThreads && (
