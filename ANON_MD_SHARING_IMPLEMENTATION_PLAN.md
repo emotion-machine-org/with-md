@@ -1,7 +1,7 @@
 # Anonymous Markdown Sharing — Implementation Plan
 
-
 ## TL;DR
+
 - Build anonymous sharing as a **separate data path** from `repos` / `mdFiles`.
 - Ship in 2 phases:
   1. Anonymous upload + public share link (read-only).
@@ -10,6 +10,7 @@
 - Add hard guardrails: size limits, rate limits, expiry, noindex, abuse controls.
 
 ## Why Separate From Existing Repo Flow
+
 - Current repo model (`repos`, `mdFiles`, `pushQueue`) is git-synced and auth-oriented.
 - Current collab auth is still permissive (`local-dev-token` path + TODO checks in `convex/collab.ts`).
 - Mixing anonymous docs into repo tables would increase security and product risk.
@@ -18,6 +19,7 @@
 ## Product Scope (Proposed)
 
 ### Phase 1 (MVP)
+
 - Anonymous user drags a single `.md` / `.markdown` file.
 - Backend creates a short share ID and stores canonical markdown content.
 - Return:
@@ -27,6 +29,7 @@
 - No comments/activity/sidebar in anon mode.
 
 ### Phase 2 (Realtime)
+
 - Same shared page supports realtime edit (TipTap + Yjs + Hocuspocus) **only** when edit key is present and valid.
 - View link remains read-only.
 - Store yjs snapshot + markdown in anon-share table, not `mdFiles`.
@@ -34,6 +37,7 @@
 ## Data Model (Convex)
 
 ### New table: `anonShares`
+
 - `shortId: string` (URL-safe short ID, unique)
 - `title: string` (derived from file name)
 - `content: string`
@@ -51,10 +55,12 @@
 - `createdByIpHash?: string`
 
 Indexes:
+
 - `by_short_id` on `shortId`
 - `by_expires_at` on `expiresAt`
 
 ### Optional table: `anonRateLimits` (if DB-backed limiting)
+
 - `bucket: string` (e.g. `create:YYYY-MM-DD:ipHash`)
 - `count: number`
 - `updatedAt: number`
@@ -62,6 +68,7 @@ Indexes:
 ## API Surface
 
 ### Next.js API routes (public-facing)
+
 - `POST /api/anon-share/create`
   - Accept markdown text + filename.
   - Validate size/type/rate-limit.
@@ -73,6 +80,7 @@ Indexes:
   - Used by anon page before opening websocket.
 
 ### Convex functions
+
 - `anonShares:create` mutation
 - `anonShares:getPublic` query (by `shortId`)
 - `anonShares:authenticate` internal query (token + documentName + role check)
@@ -81,6 +89,7 @@ Indexes:
 - `anonShares:storeDocumentOversized` internal mutation
 
 ### Hocuspocus routing
+
 - Keep existing doc behavior for repo files.
 - Add document namespace convention:
   - Repo docs: existing `mdFileId` behavior unchanged.
@@ -92,6 +101,7 @@ Indexes:
 ## UI/UX Plan
 
 ### Entry points
+
 - Landing page (`web/src/app/page.tsx`):
   - Add secondary CTA: `Share Markdown Instantly`.
   - Support drag-drop zone for anonymous upload.
@@ -99,6 +109,7 @@ Indexes:
   - `web/src/app/s/[shareId]/page.tsx`.
 
 ### Shared doc page behavior
+
 - View mode (default):
   - Render markdown cleanly.
   - Show lightweight header with share status + copy link.
@@ -107,6 +118,7 @@ Indexes:
   - No repo-specific UI (file tree, comments panel, branch switch, push/resync).
 
 ## Guardrails (Must Have)
+
 - Max upload size (recommend 512 KB for v1).
 - Daily upload cap per IP hash (recommend 20/day).
 - Websocket/session cap per shared doc (recommend 25 concurrent).
@@ -116,6 +128,7 @@ Indexes:
 - Sanitize rendered output as current markdown renderer already does.
 
 ## Security Model
+
 - View URL: public read access.
 - Edit URL: capability secret in query string (`?edit=`) for now.
 - Store only `editSecretHash` (SHA-256 + server salt).
@@ -137,11 +150,13 @@ Indexes:
 ## Testing Plan
 
 ### Unit
+
 - Path/type/size validation.
 - Edit key hashing + verification.
 - Token issuance + expiration checks.
 
 ### Integration
+
 - Create share -> open view URL.
 - Open edit URL in two tabs -> realtime sync works.
 - View URL cannot mutate doc.
@@ -149,16 +164,19 @@ Indexes:
 - Oversized realtime payload follows oversize path.
 
 ### Manual
+
 - Chrome/Safari drag-drop.
 - Mobile open view URL.
 - Abuse cases: too many uploads, invalid file types, invalid edit keys.
 
 ## Rollout
+
 - Stage 1: hidden behind feature flag.
 - Stage 2: enable for a small cohort.
 - Stage 3: default on, monitor create volume + websocket load + abuse signals.
 
 ## Open Questions (Decision Needed)
+
 1. Should default shared link be strictly read-only, with separate edit link? (recommended: yes)
 2. Share expiration default: 7, 30, or 90 days? (recommended: 30)
 3. Max markdown upload size for v1: 256 KB, 512 KB, or 1 MB? (recommended: 512 KB)
@@ -166,3 +184,4 @@ Indexes:
 5. Keep anonymous comments out of scope for v1? (recommended: yes)
 6. Should edit link auto-rotate/revoke from UI in v1? (recommended: no, add in v2)
 
+&nbsp;
