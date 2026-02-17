@@ -40,7 +40,7 @@ export function useAuth(): AuthState {
           const isValidBg = Number.isFinite(data.bgIndex)
             && typeof data.bgIndex === 'number'
             && data.bgIndex >= 0
-            && data.bgIndex <= 11;
+            && data.bgIndex <= 10;
           if (isValidBg) {
             const bg = String(Math.floor(data.bgIndex as number));
             document.documentElement.setAttribute('data-bg', bg);
@@ -55,7 +55,7 @@ export function useAuth(): AuthState {
             try {
               const raw = window.localStorage.getItem('withmd-bg');
               const localBg = raw == null ? NaN : Number.parseInt(raw, 10);
-              if (Number.isFinite(localBg) && localBg >= 0 && localBg <= 11) {
+              if (Number.isFinite(localBg) && localBg >= 0 && localBg <= 10) {
                 void fetch('/api/user-preferences/background', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },

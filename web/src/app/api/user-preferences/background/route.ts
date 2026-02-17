@@ -4,7 +4,7 @@ import { F, mutateConvex } from '@/lib/with-md/convex-client';
 import { getSessionOrNull } from '@/lib/with-md/session';
 
 const MIN_BG_INDEX = 0;
-const MAX_BG_INDEX = 11;
+const MAX_BG_INDEX = 10;
 
 function normalizeBgIndex(value: unknown): number | null {
   if (!Number.isFinite(value)) return null;

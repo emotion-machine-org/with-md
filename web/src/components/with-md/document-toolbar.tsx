@@ -36,7 +36,7 @@ const SYNTAX_REASON_LABELS: Record<string, string> = {
   gfm_table: 'gfm_table',
 };
 
-const BG_COUNT = 12;
+const BG_COUNT = 11;
 
 function modeClass(active: boolean): string {
   return active ? 'withmd-dock-btn withmd-dock-btn-active' : 'withmd-dock-btn';
