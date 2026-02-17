@@ -422,6 +422,7 @@ export const storeDocument = internalMutation({
           repoId: file.repoId,
           mdFileId: file._id,
           path: file.path,
+          branch: file.branch,
           newContent: markdownContent,
           authorLogins: [],
           authorEmails: [],
@@ -592,6 +593,7 @@ export const onAllDisconnected = internalMutation({
         repoId: file.repoId,
         mdFileId: file._id,
         path: file.path,
+        branch: file.branch,
         newContent: markdownContent,
         authorLogins: [],
         authorEmails: [],
@@ -642,15 +644,37 @@ export const reviveByPath = mutation({
   args: {
     repoId: v.id('repos'),
     path: v.string(),
+    branch: v.optional(v.string()),
     content: v.string(),
     fileCategory: v.string(),
     lastGithubSha: v.string(),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query('mdFiles')
-      .withIndex('by_repo_and_path', (q) => q.eq('repoId', args.repoId).eq('path', args.path))
-      .first();
+    let existing = args.branch !== undefined
+      ? await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_branch_path', (q) => q.eq('repoId', args.repoId).eq('branch', args.branch).eq('path', args.path))
+          .first()
+      : null;
+
+    // Check legacy records for default branch
+    if (!existing && args.branch !== undefined) {
+      const repo = await ctx.db.get(args.repoId);
+      if (repo && args.branch === repo.defaultBranch) {
+        existing = await ctx.db
+          .query('mdFiles')
+          .withIndex('by_repo_branch_path', (q) => q.eq('repoId', args.repoId).eq('branch', undefined).eq('path', args.path))
+          .first();
+      }
+    }
+
+    // Fallback to old index when no branch provided
+    if (!existing && args.branch === undefined) {
+      existing = await ctx.db
+        .query('mdFiles')
+        .withIndex('by_repo_and_path', (q) => q.eq('repoId', args.repoId).eq('path', args.path))
+        .first();
+    }
 
     if (existing) {
       await ctx.db.patch(existing._id, {
@@ -663,6 +687,8 @@ export const reviveByPath = mutation({
         lastGithubSha: args.lastGithubSha,
         lastSyncedAt: Date.now(),
         ...clearOversizedFields(),
+        // Upgrade legacy records
+        ...(args.branch !== undefined && existing.branch === undefined ? { branch: args.branch } : {}),
       });
       return existing._id;
     }
@@ -670,6 +696,7 @@ export const reviveByPath = mutation({
     return ctx.db.insert('mdFiles', {
       repoId: args.repoId,
       path: args.path,
+      branch: args.branch,
       content: args.content,
       contentHash: hashContent(args.content),
       lastGithubSha: args.lastGithubSha,

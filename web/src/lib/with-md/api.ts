@@ -53,6 +53,7 @@ interface WithMdFileRow {
   _id: string;
   repoId: string;
   path: string;
+  branch?: string;
   content: string;
   contentHash: string;
   fileCategory: string;
@@ -101,17 +102,17 @@ interface WithMdPushQueueRow {
 
 export interface WithMdApi {
   listRepos(userId?: string): Promise<RepoSummary[]>;
-  listFilesByRepo(repoId: string): Promise<MdFile[]>;
+  listFilesByRepo(repoId: string, branch?: string): Promise<MdFile[]>;
   listQueuedPaths(repoId: string): Promise<string[]>;
-  resolveByPath(repoId: string, path: string): Promise<MdFile | null>;
+  resolveByPath(repoId: string, path: string, branch?: string): Promise<MdFile | null>;
   getFile(mdFileId: string): Promise<MdFile | null>;
   listCommentsByFile(mdFileId: string): Promise<CommentRecord[]>;
   createComment(input: CreateCommentInput): Promise<CommentRecord>;
   deleteComment(commentId: string): Promise<void>;
   saveSource(input: SaveSourceInput): Promise<{ changed: boolean }>;
-  importLocalBatch(repoId: string, files: LocalImportFileInput[]): Promise<LocalImportResult>;
-  movePath(repoId: string, fromPath: string, toDirectoryPath: string, conflictMode?: ImportConflictMode): Promise<PathRewriteResult>;
-  renamePath(repoId: string, fromPath: string, toPath: string, conflictMode?: ImportConflictMode): Promise<PathRewriteResult>;
+  importLocalBatch(repoId: string, files: LocalImportFileInput[], branch?: string): Promise<LocalImportResult>;
+  movePath(repoId: string, fromPath: string, toDirectoryPath: string, conflictMode?: ImportConflictMode, branch?: string): Promise<PathRewriteResult>;
+  renamePath(repoId: string, fromPath: string, toPath: string, conflictMode?: ImportConflictMode, branch?: string): Promise<PathRewriteResult>;
   undoFileOperation(repoId: string, undoPayload: string): Promise<UndoFileOperationResult>;
   listActivity(repoId: string): Promise<ActivityItem[]>;
   pushNow(repoId: string): Promise<{ ok: boolean }>;
@@ -168,6 +169,7 @@ function mapFile(row: WithMdFileRow): MdFile {
     mdFileId: row._id,
     repoId: row.repoId,
     path: row.path,
+    branch: row.branch,
     content: row.content,
     contentHash: row.contentHash,
     fileCategory: normalizeCategory(row.fileCategory),
@@ -249,11 +251,13 @@ const convexApi: WithMdApi = {
     return rows.map(mapRepo);
   },
 
-  async listFilesByRepo(repoId) {
-    const rows = await queryConvex<WithMdFileRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.mdFilesListByRepo, {
+  async listFilesByRepo(repoId, branch) {
+    const args: Record<string, unknown> = {
       repoId: repoId as never,
       includeDeleted: false,
-    });
+    };
+    if (branch !== undefined) args.branch = branch;
+    const rows = await queryConvex<WithMdFileRow[]>(WITH_MD_CONVEX_FUNCTIONS.queries.mdFilesListByRepo, args);
     return rows.map(mapFile);
   },
 
@@ -264,11 +268,13 @@ const convexApi: WithMdApi = {
     return Array.from(new Set(rows.map((row) => row.path)));
   },
 
-  async resolveByPath(repoId, path) {
-    const row = await queryConvex<WithMdFileRow | null>(WITH_MD_CONVEX_FUNCTIONS.queries.mdFilesResolveByPath, {
+  async resolveByPath(repoId, path, branch) {
+    const args: Record<string, unknown> = {
       repoId: repoId as never,
       path,
-    });
+    };
+    if (branch !== undefined) args.branch = branch;
+    const row = await queryConvex<WithMdFileRow | null>(WITH_MD_CONVEX_FUNCTIONS.queries.mdFilesResolveByPath, args);
     return row ? mapFile(row) : null;
   },
 
@@ -348,35 +354,41 @@ const convexApi: WithMdApi = {
     });
   },
 
-  async importLocalBatch(repoId, files) {
+  async importLocalBatch(repoId, files, branch) {
     const rows = files.map((file) => ({
       relativePath: file.relativePath,
       targetPath: file.targetPath,
       content: file.content,
       conflictMode: file.conflictMode,
     }));
-    return await mutateConvex<LocalImportResult>(WITH_MD_CONVEX_FUNCTIONS.mutations.mdFilesImportLocalBatch, {
+    const args: Record<string, unknown> = {
       repoId: repoId as never,
       files: rows,
-    });
+    };
+    if (branch !== undefined) args.branch = branch;
+    return await mutateConvex<LocalImportResult>(WITH_MD_CONVEX_FUNCTIONS.mutations.mdFilesImportLocalBatch, args);
   },
 
-  async movePath(repoId, fromPath, toDirectoryPath, conflictMode) {
-    return await mutateConvex<PathRewriteResult>(WITH_MD_CONVEX_FUNCTIONS.mutations.mdFilesMovePath, {
+  async movePath(repoId, fromPath, toDirectoryPath, conflictMode, branch) {
+    const args: Record<string, unknown> = {
       repoId: repoId as never,
       fromPath,
       toDirectoryPath,
       conflictMode,
-    });
+    };
+    if (branch !== undefined) args.branch = branch;
+    return await mutateConvex<PathRewriteResult>(WITH_MD_CONVEX_FUNCTIONS.mutations.mdFilesMovePath, args);
   },
 
-  async renamePath(repoId, fromPath, toPath, conflictMode) {
-    return await mutateConvex<PathRewriteResult>(WITH_MD_CONVEX_FUNCTIONS.mutations.mdFilesRenamePath, {
+  async renamePath(repoId, fromPath, toPath, conflictMode, branch) {
+    const args: Record<string, unknown> = {
       repoId: repoId as never,
       fromPath,
       toPath,
       conflictMode,
-    });
+    };
+    if (branch !== undefined) args.branch = branch;
+    return await mutateConvex<PathRewriteResult>(WITH_MD_CONVEX_FUNCTIONS.mutations.mdFilesRenamePath, args);
   },
 
   async undoFileOperation(repoId, undoPayload) {

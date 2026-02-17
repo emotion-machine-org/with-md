@@ -29,6 +29,7 @@ export default defineSchema({
   mdFiles: defineTable({
     repoId: v.id('repos'),
     path: v.string(),
+    branch: v.optional(v.string()),
     content: v.string(),
     contentHash: v.string(),
     lastGithubSha: v.string(),
@@ -48,6 +49,8 @@ export default defineSchema({
     oversizeUpdatedAt: v.optional(v.number()),
   })
     .index('by_repo_and_path', ['repoId', 'path'])
+    .index('by_repo_branch_path', ['repoId', 'branch', 'path'])
+    .index('by_repo_and_branch', ['repoId', 'branch'])
     .index('by_repo_and_category', ['repoId', 'fileCategory'])
     .index('by_repo', ['repoId']),
 
@@ -90,6 +93,7 @@ export default defineSchema({
     repoId: v.id('repos'),
     mdFileId: v.id('mdFiles'),
     path: v.string(),
+    branch: v.optional(v.string()),
     newContent: v.string(),
     authorLogins: v.array(v.string()),
     authorEmails: v.array(v.string()),
