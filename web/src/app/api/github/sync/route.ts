@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
     githubRepoId: number;
     accountLogin?: string;
     accountType?: string;
+    activeBranch?: string;
   };
 
   try {
@@ -46,7 +47,10 @@ export async function POST(req: NextRequest) {
       owner: body.owner,
       name: body.repo,
       defaultBranch: body.defaultBranch,
+      activeBranch: body.activeBranch,
     });
+
+    const effectiveBranch = body.activeBranch || body.defaultBranch;
 
     // Update sync status to syncing
     await mutateConvex(F.mutations.reposUpdateSyncStatus, {
@@ -55,7 +59,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Fetch .md tree from GitHub
-    const tree = await fetchMdTree(body.installationId, body.owner, body.repo, body.defaultBranch);
+    const tree = await fetchMdTree(body.installationId, body.owner, body.repo, effectiveBranch);
 
     // Fetch blob contents in batches of 10
     const BATCH_SIZE = 10;
@@ -107,7 +111,7 @@ export async function POST(req: NextRequest) {
       actorId: session.githubLogin,
       type: 'sync_completed',
       summary: [
-        `Synced ${filesCount} .md files from ${body.owner}/${body.repo}`,
+        `Synced ${filesCount} .md files from ${body.owner}/${body.repo}@${effectiveBranch}`,
         `(deleted ${missingResult.deletedCount ?? 0},`,
         `kept local ${missingResult.preservedQueuedCount ?? 0} queued + ${missingResult.preservedLocalOnlyCount ?? 0} local-only).`,
       ].join(' '),

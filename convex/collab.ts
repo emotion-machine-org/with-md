@@ -95,7 +95,7 @@ function collapseExactRepetition(content: string): SanitizedRealtimeMarkdown | n
 
   const deduped = content.slice(0, period);
   if (!deduped.trim()) return null;
-  return { content: deduped, repeats };
+  return { content: deduped, repeats, strippedLeadingPlaceholders: false };
 }
 
 function collapseTopHeadingRepetition(content: string): SanitizedRealtimeMarkdown | null {
@@ -122,7 +122,7 @@ function collapseTopHeadingRepetition(content: string): SanitizedRealtimeMarkdow
   if (!deduped.trim()) return null;
   if (deduped.length < HEADING_REPEAT_MIN_SECTION_BYTES) return null;
   if (content.length - deduped.length < HEADING_REPEAT_MIN_DUPLICATED_BYTES) return null;
-  return { content: deduped, repeats };
+  return { content: deduped, repeats, strippedLeadingPlaceholders: false };
 }
 
 function sanitizeRealtimeMarkdown(content: string): SanitizedRealtimeMarkdown {

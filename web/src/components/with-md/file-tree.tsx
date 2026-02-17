@@ -12,6 +12,7 @@ interface Props {
   pendingPaths?: ReadonlySet<string>;
   activeRepo?: RepoSummary;
   onOpenRepoPicker?: () => void;
+  onOpenBranchSwitcher?: () => void;
   onSelectPath?: (path: string) => void;
   onMovePath?: (input: { fromPath: string; toDirectoryPath: string; isDirectory: boolean }) => Promise<void>;
   onRenamePath?: (input: { fromPath: string; toPath: string; isDirectory: boolean }) => Promise<void>;
@@ -176,7 +177,18 @@ function SwitchIcon() {
   );
 }
 
-export default function FileTree({ repoId, files, activePath, pendingPaths, activeRepo, onOpenRepoPicker, onSelectPath, onMovePath, onRenamePath }: Props) {
+function BranchSmallIcon() {
+  return (
+    <svg className="withmd-repo-switcher-branch-icon" viewBox="0 0 16 16" aria-hidden="true" width="12" height="12">
+      <path
+        d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+export default function FileTree({ repoId, files, activePath, pendingPaths, activeRepo, onOpenRepoPicker, onOpenBranchSwitcher, onSelectPath, onMovePath, onRenamePath }: Props) {
   const tree = useMemo(() => buildTree(files), [files]);
   const pendingDirectoryPaths = useMemo(() => {
     const directories = new Set<string>();
@@ -464,6 +476,20 @@ export default function FileTree({ repoId, files, activePath, pendingPaths, acti
               <SwitchIcon />
             </span>
           </button>
+          {(activeRepo.activeBranch || activeRepo.defaultBranch) && (
+            <button
+              type="button"
+              className="withmd-repo-switcher-branch"
+              onClick={onOpenBranchSwitcher}
+              title="Switch branch"
+            >
+              <BranchSmallIcon />
+              <span className="withmd-repo-switcher-branch-name">
+                {activeRepo.activeBranch || activeRepo.defaultBranch}
+              </span>
+              <SwitchIcon />
+            </button>
+          )}
         </div>
       )}
     </aside>

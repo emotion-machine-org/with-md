@@ -26,6 +26,7 @@ export interface RepoSummary {
   installationId?: string;
   githubRepoId?: number;
   defaultBranch?: string;
+  activeBranch?: string;
   githubInstallationId?: number;
 }
 

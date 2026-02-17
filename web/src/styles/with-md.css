@@ -1321,6 +1321,23 @@
   padding: var(--withmd-repo-picker-gutter, 32px);
 }
 
+.withmd-repo-picker-footer {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.withmd-btn-green {
+  background: #22863a;
+  border-color: #2ea04366;
+  color: #fff;
+}
+
+.withmd-btn-green:hover {
+  background: #2ea043;
+  color: #fff;
+}
+
 .withmd-repo-picker-list {
   display: flex;
   flex-direction: column;
@@ -2360,6 +2377,214 @@
   border-radius: 999px;
   background: #34d399;
   border: 1.5px solid var(--withmd-panel);
+}
+
+/* ── Branch Picker (repo picker inline) ── */
+
+.withmd-branch-picker-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 140ms ease;
+  opacity: 0.6;
+}
+
+.withmd-branch-picker-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.withmd-repo-row-expanded {
+  background: var(--withmd-glass-bg-hover);
+}
+
+.withmd-branch-picker {
+  padding: 4px 0 8px 32px;
+}
+
+.withmd-branch-picker-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.withmd-branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.withmd-branch-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--withmd-body);
+  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.withmd-branch-row:hover {
+  background: var(--withmd-glass-bg-hover);
+  color: var(--withmd-text);
+}
+
+.withmd-branch-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.withmd-branch-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.withmd-branch-icon {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.withmd-branch-default-badge {
+  font-size: 10px;
+  font-weight: 500;
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: var(--withmd-muted);
+  border: 1px solid var(--withmd-glass-border);
+  padding: 1px 6px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── Branch Dropdown (sidebar switcher) ── */
+
+.withmd-branch-dropdown {
+  position: fixed;
+  bottom: 80px;
+  left: 12px;
+  z-index: 210;
+  width: 280px;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+  background: var(--withmd-panel);
+  border: 1px solid var(--withmd-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.withmd-branch-dropdown-header {
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--withmd-border);
+}
+
+.withmd-branch-dropdown-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+}
+
+.withmd-branch-dropdown-list {
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+.withmd-branch-dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--withmd-body);
+  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.withmd-branch-dropdown-item:hover {
+  background: var(--withmd-glass-bg-hover);
+  color: var(--withmd-text);
+}
+
+.withmd-branch-dropdown-item.is-current {
+  color: var(--withmd-text);
+}
+
+.withmd-branch-dropdown-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.withmd-branch-dropdown-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Branch in file tree footer ── */
+
+.withmd-repo-switcher-branch {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  margin-top: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--withmd-muted);
+  font-family: 'Funktional Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.withmd-repo-switcher-branch:hover {
+  background: var(--withmd-glass-bg);
+  color: var(--withmd-body);
+}
+
+.withmd-repo-switcher-branch .withmd-repo-switcher-icon {
+  width: 11px;
+  height: 11px;
+  margin-left: auto;
+}
+
+.withmd-repo-switcher-branch-icon {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.withmd-repo-switcher-branch-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 860px) {

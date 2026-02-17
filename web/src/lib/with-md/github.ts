@@ -163,6 +163,64 @@ export async function listInstallationRepos(installationId: number): Promise<Rep
   return repos;
 }
 
+// ---------- Branch listing ----------
+
+export interface BranchInfo {
+  name: string;
+  isDefault: boolean;
+}
+
+interface GhBranch {
+  name: string;
+}
+
+export async function listBranches(
+  installationId: number,
+  owner: string,
+  repo: string,
+  defaultBranch: string,
+): Promise<BranchInfo[]> {
+  const token = await getInstallationToken(installationId);
+  const branches: BranchInfo[] = [];
+  let page = 1;
+
+  while (true) {
+    const res = await fetch(
+      `${GITHUB_API}/repos/${owner}/${repo}/branches?per_page=100&page=${page}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+        },
+      },
+    );
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Failed to list branches: ${res.status} ${body}`);
+    }
+
+    const data = (await res.json()) as GhBranch[];
+    for (const b of data) {
+      branches.push({
+        name: b.name,
+        isDefault: b.name === defaultBranch,
+      });
+    }
+
+    if (data.length < 100) break;
+    page++;
+  }
+
+  // Sort: default first, then alphabetical
+  branches.sort((a, b) => {
+    if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return branches;
+}
+
 // ---------- Tree / Blob helpers ----------
 
 interface TreeEntry {

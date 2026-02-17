@@ -1053,7 +1053,7 @@ export const movePath = mutation({
     const conflictMode: ConflictMode = args.conflictMode === 'replace' ? 'replace' : 'keep_both';
     const plan = buildPathRewritePlan(repoFiles, fromPath, nextRoot, conflictMode);
     if (!plan.ok) {
-      return { ok: false, reason: plan.reason as const };
+      return { ok: false, reason: plan.reason };
     }
 
     const now = Date.now();
@@ -1121,7 +1121,7 @@ export const renamePath = mutation({
     const conflictMode: ConflictMode = args.conflictMode === 'replace' ? 'replace' : 'keep_both';
     const plan = buildPathRewritePlan(repoFiles, fromPath, requestedToPath, conflictMode);
     if (!plan.ok) {
-      return { ok: false, reason: plan.reason as const };
+      return { ok: false, reason: plan.reason };
     }
 
     const now = Date.now();

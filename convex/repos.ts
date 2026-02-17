@@ -163,6 +163,7 @@ export const upsertFromGithub = mutation({
     owner: v.string(),
     name: v.string(),
     defaultBranch: v.string(),
+    activeBranch: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -176,6 +177,7 @@ export const upsertFromGithub = mutation({
         owner: args.owner,
         name: args.name,
         defaultBranch: args.defaultBranch,
+        activeBranch: args.activeBranch,
       });
       return existing._id;
     }
@@ -186,6 +188,7 @@ export const upsertFromGithub = mutation({
       owner: args.owner,
       name: args.name,
       defaultBranch: args.defaultBranch,
+      activeBranch: args.activeBranch,
       syncStatus: 'syncing',
     });
   },
