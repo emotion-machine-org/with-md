@@ -50,7 +50,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         if (!data || !data.type) return;
 
         // Messages from the iframe → forward to the extension host
-        if (data.type === 'ready' || data.type === 'contentChanged' || data.type === 'requestLogin') {
+        if (data.type === 'ready' || data.type === 'contentChanged' || data.type === 'requestLogin' || data.type === 'collabStatus') {
           vscode.postMessage(data);
         }
 

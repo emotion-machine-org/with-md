@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { signCollabToken } from '@/lib/with-md/collab-token';
 import { F, mutateConvex } from '@/lib/with-md/convex-client';
 import { getSession } from '@/lib/with-md/session';
 
@@ -50,9 +51,16 @@ export async function POST(req: NextRequest) {
   session.avatarUrl = ghUser.avatar_url;
   await session.save();
 
+  // Return a signed auth token so the embed page can authenticate subsequent
+  // API calls via Authorization header.  This avoids reliance on the session
+  // cookie, which is silently blocked in VSCode webview iframes (third-party
+  // cookie restrictions).  The token also doubles as the Hocuspocus collab token.
+  const authToken = await signCollabToken(userId);
+
   return NextResponse.json({
     ok: true,
     login: ghUser.login,
     avatarUrl: ghUser.avatar_url,
+    authToken,
   });
 }

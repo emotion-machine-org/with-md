@@ -58,6 +58,11 @@ class WithMdEditorProvider {
         // Counter to prevent circular updates (counter instead of boolean avoids
         // races when multiple edits overlap)
         let pendingWebviewEdits = 0;
+        // Track whether the embed page is in collab mode (Hocuspocus connected).
+        // When active, Yjs is the source of truth — we must not send contentUpdate
+        // messages back to the embed because the local file is being overwritten by
+        // Hocuspocus content via contentChanged.
+        let collabActive = false;
         // Handle messages from the webview
         const messageDisposable = webviewPanel.webview.onDidReceiveMessage((message) => {
             switch (message.type) {
@@ -110,6 +115,10 @@ class WithMdEditorProvider {
                     })();
                     break;
                 }
+                case 'collabStatus': {
+                    collabActive = message.active === true;
+                    break;
+                }
                 case 'contentChanged': {
                     if (typeof message.content !== 'string')
                         return;
@@ -135,6 +144,10 @@ class WithMdEditorProvider {
             if (pendingWebviewEdits > 0)
                 return;
             if (event.contentChanges.length === 0)
+                return;
+            // In collab mode, Yjs is the source of truth. Don't send file changes
+            // back to the embed — they'd conflict with the Hocuspocus document.
+            if (collabActive)
                 return;
             webviewPanel.webview.postMessage({
                 type: 'contentUpdate',

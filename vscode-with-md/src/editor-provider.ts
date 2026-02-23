@@ -36,8 +36,14 @@ export class WithMdEditorProvider implements vscode.CustomTextEditorProvider {
     // races when multiple edits overlap)
     let pendingWebviewEdits = 0;
 
+    // Track whether the embed page is in collab mode (Hocuspocus connected).
+    // When active, Yjs is the source of truth — we must not send contentUpdate
+    // messages back to the embed because the local file is being overwritten by
+    // Hocuspocus content via contentChanged.
+    let collabActive = false;
+
     // Handle messages from the webview
-    const messageDisposable = webviewPanel.webview.onDidReceiveMessage((message: { type: string; content?: string; githubToken?: string }) => {
+    const messageDisposable = webviewPanel.webview.onDidReceiveMessage((message: { type: string; content?: string; githubToken?: string; active?: boolean }) => {
       switch (message.type) {
         case 'ready': {
           // iframe is ready — send initial content and mode info
@@ -90,6 +96,11 @@ export class WithMdEditorProvider implements vscode.CustomTextEditorProvider {
           break;
         }
 
+        case 'collabStatus': {
+          collabActive = message.active === true;
+          break;
+        }
+
         case 'contentChanged': {
           if (typeof message.content !== 'string') return;
 
@@ -118,6 +129,9 @@ export class WithMdEditorProvider implements vscode.CustomTextEditorProvider {
       if (event.document.uri.toString() !== document.uri.toString()) return;
       if (pendingWebviewEdits > 0) return;
       if (event.contentChanges.length === 0) return;
+      // In collab mode, Yjs is the source of truth. Don't send file changes
+      // back to the embed — they'd conflict with the Hocuspocus document.
+      if (collabActive) return;
 
       webviewPanel.webview.postMessage({
         type: 'contentUpdate',

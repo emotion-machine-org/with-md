@@ -49,4 +49,23 @@ export async function signCollabToken(userId: string): Promise<string> {
   return `${payload}:${hmac}`;
 }
 
+export async function verifyCollabToken(token: string): Promise<{ userId: string } | null> {
+  const parts = token.split(':');
+  if (parts.length !== 4) return null;
+
+  const [prefix, userId, timestampStr, providedHmac] = parts;
+  if (prefix !== TOKEN_PREFIX || !userId) return null;
+
+  const timestamp = parseInt(timestampStr, 10);
+  if (isNaN(timestamp)) return null;
+  if (Date.now() - timestamp > TOKEN_TTL_MS) return null;
+
+  const secret = getSecret();
+  const payload = `${prefix}:${userId}:${timestampStr}`;
+  const expectedHmac = await hmacSign(secret, payload);
+  if (providedHmac !== expectedHmac) return null;
+
+  return { userId };
+}
+
 export { TOKEN_PREFIX, TOKEN_TTL_MS };

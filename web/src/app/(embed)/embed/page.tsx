@@ -6,7 +6,9 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import * as Y from 'yjs';
 
 import FormatToolbar from '@/components/with-md/format-toolbar';
+import { usePeerCount } from '@/components/with-md/presence-strip';
 import { buildEditorExtensions } from '@/components/with-md/tiptap/editor-extensions';
+import { useCollabDoc } from '@/hooks/with-md/use-collab-doc';
 
 type Mode = 'local' | 'repo';
 
@@ -37,6 +39,12 @@ interface UserInfo {
   avatarUrl: string;
 }
 
+const REALTIME_ENABLED = process.env.NEXT_PUBLIC_WITHMD_ENABLE_REALTIME === '1';
+
+// ---------------------------------------------------------------------------
+// Utility helpers
+// ---------------------------------------------------------------------------
+
 function getEditorMarkdown(editor: unknown): string | null {
   try {
     const md = (editor as { getMarkdown?: () => string }).getMarkdown?.();
@@ -56,7 +64,12 @@ function getEditorMarkdown(editor: unknown): string | null {
   return null;
 }
 
-async function exchangeGithubToken(token: string): Promise<UserInfo | null> {
+interface ExchangeResult {
+  user: UserInfo;
+  authToken: string;
+}
+
+async function exchangeGithubToken(token: string): Promise<ExchangeResult | null> {
   try {
     const res = await fetch('/api/auth/token-exchange', {
       method: 'POST',
@@ -64,14 +77,26 @@ async function exchangeGithubToken(token: string): Promise<UserInfo | null> {
       body: JSON.stringify({ githubToken: token }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { ok?: boolean; login?: string; avatarUrl?: string };
-    if (data.ok && data.login) {
-      return { login: data.login, avatarUrl: data.avatarUrl ?? '' };
+    const data = (await res.json()) as { ok?: boolean; login?: string; avatarUrl?: string; authToken?: string };
+    if (data.ok && data.login && data.authToken) {
+      return {
+        user: { login: data.login, avatarUrl: data.avatarUrl ?? '' },
+        authToken: data.authToken,
+      };
     }
     return null;
   } catch {
     return null;
   }
+}
+
+function hashToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = ((hash % 360) + 360) % 360;
+  return `hsl(${hue}, 70%, 60%)`;
 }
 
 function toggleTheme() {
@@ -117,28 +142,25 @@ function modeClass(active: boolean): string {
   return active ? 'withmd-dock-btn withmd-dock-btn-active' : 'withmd-dock-btn';
 }
 
-export default function EmbedPage() {
-  const [initialized, setInitialized] = useState(false);
-  const [mode, setMode] = useState<Mode>('local');
-  const [repoMeta, setRepoMeta] = useState<{ owner: string; repo: string; path: string } | null>(null);
-  const [formatBarOpen, setFormatBarOpen] = useState(false);
-  const [sourceMode, setSourceMode] = useState(false);
-  const [repoStatus, setRepoStatus] = useState<'loading' | 'connected' | 'not_found' | 'unauthenticated' | 'error'>('loading');
-  const [user, setUser] = useState<UserInfo | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [content, setContent] = useState('');
-  const [shareMenuOpen, setShareMenuOpen] = useState(false);
-  const [shareBusy, setShareBusy] = useState(false);
-  const shareMenuRef = useRef<HTMLDivElement | null>(null);
-  const shareLinkSnapshotRef = useRef<{ viewUrl: string; editUrl: string; markdownUrl: string } | null>(null);
+// ---------------------------------------------------------------------------
+// LocalEditor — standalone editor with a static Y.Doc (no Hocuspocus)
+// ---------------------------------------------------------------------------
 
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSentContentRef = useRef<string>('');
-  const updatingFromParentRef = useRef(false);
-  // Tracks whether token exchange is pending so repo resolution waits
-  const tokenExchangeRef = useRef<Promise<UserInfo | null> | null>(null);
+function LocalEditor({
+  initialContent,
+  formatBarOpen,
+  onContentChange,
+  applyContentUpdateRef,
+}: {
+  initialContent: string;
+  formatBarOpen: boolean;
+  onContentChange: (md: string) => void;
+  applyContentUpdateRef: React.MutableRefObject<((content: string) => void) | null>;
+}) {
+  const updatingRef = useRef(false);
+  const onContentChangeRef = useRef(onContentChange);
+  onContentChangeRef.current = onContentChange;
 
-  // Create a static ydoc for local mode (not connected to any provider)
   const ydoc = useMemo(() => new Y.Doc(), []);
   useEffect(() => () => { ydoc.destroy(); }, [ydoc]);
 
@@ -159,30 +181,217 @@ export default function EmbedPage() {
       enableRealtime: false,
     }),
     contentType: 'markdown' as const,
-    content: '',
+    content: initialContent,
     onUpdate({ editor: nextEditor }) {
-      if (updatingFromParentRef.current) return;
-
+      if (updatingRef.current) return;
       const markdown = getEditorMarkdown(nextEditor);
-      if (markdown == null) return;
-
-      setContent(markdown);
-      // Invalidate cached share links when content changes
-      shareLinkSnapshotRef.current = null;
-
-      // Debounce sending content changes to parent
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      debounceTimerRef.current = setTimeout(() => {
-        if (markdown === lastSentContentRef.current) return;
-        lastSentContentRef.current = markdown;
-        window.parent.postMessage({ type: 'contentChanged', content: markdown }, '*');
-      }, 300);
+      if (markdown != null) onContentChangeRef.current(markdown);
     },
   });
 
-  // Listen for messages from the parent (VSCode webview bridge)
+  // Register callback so the parent can push contentUpdate messages
+  useEffect(() => {
+    applyContentUpdateRef.current = (newContent: string) => {
+      if (!editor) return;
+      updatingRef.current = true;
+      (editor.commands as unknown as { setContent: (value: string, options?: { contentType?: string }) => boolean })
+        .setContent(newContent, { contentType: 'markdown' });
+      updatingRef.current = false;
+    };
+    return () => { applyContentUpdateRef.current = null; };
+  }, [editor, applyContentUpdateRef]);
+
+  if (!editor) {
+    return (
+      <div className="withmd-anon-editor-wrap withmd-fill" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p className="withmd-muted-sm">Loading editor...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="withmd-anon-editor-wrap withmd-fill">
+      {formatBarOpen && <FormatToolbar editor={editor} />}
+      <div className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill">
+        <EditorContent editor={editor} />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CollabEmbedEditor — collaborative editor connected to Hocuspocus
+// ---------------------------------------------------------------------------
+
+function CollabEmbedEditor({
+  mdFileId,
+  contentHash,
+  collabToken,
+  userName,
+  userColor,
+  formatBarOpen,
+  onContentChange,
+  onPeerCountChange,
+  onConnectedChange,
+}: {
+  mdFileId: string;
+  contentHash: string;
+  collabToken: string;
+  userName: string;
+  userColor: string;
+  formatBarOpen: boolean;
+  onContentChange: (md: string) => void;
+  onPeerCountChange: (count: number) => void;
+  onConnectedChange: (connected: boolean) => void;
+}) {
+  const onContentChangeRef = useRef(onContentChange);
+  onContentChangeRef.current = onContentChange;
+
+  const { ydoc, provider, connected } = useCollabDoc({
+    mdFileId,
+    contentHash,
+    token: collabToken,
+    enabled: true,
+  });
+
+  const peerCount = usePeerCount(provider, connected, userName);
+
+  useEffect(() => {
+    onPeerCountChange(peerCount);
+  }, [peerCount, onPeerCountChange]);
+
+  useEffect(() => {
+    onConnectedChange(connected);
+  }, [connected, onConnectedChange]);
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: 'withmd-prose',
+        spellcheck: 'false',
+        autocorrect: 'off',
+        autocapitalize: 'off',
+      },
+    },
+    extensions: buildEditorExtensions({
+      ydoc,
+      provider,
+      user: { name: userName, color: userColor },
+      enableRealtime: true,
+    }),
+    onUpdate({ editor: nextEditor }) {
+      const markdown = getEditorMarkdown(nextEditor);
+      if (markdown != null) onContentChangeRef.current(markdown);
+    },
+  });
+
+  if (!editor) {
+    return (
+      <div className="withmd-anon-editor-wrap withmd-fill" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p className="withmd-muted-sm">Connecting...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="withmd-anon-editor-wrap withmd-fill">
+      {formatBarOpen && <FormatToolbar editor={editor} />}
+      <div className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill">
+        <EditorContent editor={editor} />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EmbedPage — parent orchestrator
+// ---------------------------------------------------------------------------
+
+export default function EmbedPage() {
+  // --- Core state ---
+  const [initialized, setInitialized] = useState(false);
+  const [mode, setMode] = useState<Mode>('local');
+  const [repoMeta, setRepoMeta] = useState<{ owner: string; repo: string; path: string } | null>(null);
+  const [formatBarOpen, setFormatBarOpen] = useState(false);
+  const [sourceMode, setSourceMode] = useState(false);
+  const [repoStatus, setRepoStatus] = useState<'loading' | 'connected' | 'not_found' | 'unauthenticated' | 'error'>('loading');
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [content, setContent] = useState('');
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+
+  // --- Collab state ---
+  const [mdFileId, setMdFileId] = useState<string | null>(null);
+  const [contentHash, setContentHash] = useState<string | null>(null);
+  // Signed auth token from token-exchange — used for both API auth (Authorization
+  // header) and as the Hocuspocus collab token.  Avoids reliance on session cookies
+  // which are blocked in VSCode webview iframes.
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [collabEnabled, setCollabEnabled] = useState(true);
+  const [peerCount, setPeerCount] = useState(0);
+  const [collabConnected, setCollabConnected] = useState(false);
+
+  // --- Derived collab flags ---
+  const collabPrerequisitesMet = REALTIME_ENABLED && !!mdFileId && !!contentHash && !!authToken;
+  const collabReady = collabPrerequisitesMet && collabEnabled;
+  // Show the toggle button as soon as we're in repo mode, authenticated, and connected
+  // (even before the collab prerequisites fully resolve). Disabled until fully ready.
+  const showCollabToggle = REALTIME_ENABLED && mode === 'repo' && !!user && repoStatus === 'connected';
+
+  // --- Refs ---
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
+  const shareLinkSnapshotRef = useRef<{ viewUrl: string; editUrl: string; markdownUrl: string } | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSentContentRef = useRef<string>('');
+  const tokenExchangeRef = useRef<Promise<ExchangeResult | null> | null>(null);
+  const applyContentUpdateRef = useRef<((content: string) => void) | null>(null);
+  const authTokenRef = useRef<string | null>(null);
+  authTokenRef.current = authToken;
+  const collabReadyRef = useRef(false);
+  collabReadyRef.current = collabReady;
+
+  // --- Collab user identity ---
+  const collabUserName = user?.login ?? 'vscode-user';
+  const collabUserColor = user ? hashToColor(user.login) : '#c7d2fe';
+
+  // --- Content change handler (shared by both editors) ---
+  const onContentChange = useCallback((markdown: string) => {
+    setContent(markdown);
+    // Invalidate cached share links when content changes
+    shareLinkSnapshotRef.current = null;
+
+    // Debounce sending content changes to parent
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      if (markdown === lastSentContentRef.current) return;
+      lastSentContentRef.current = markdown;
+      window.parent.postMessage({ type: 'contentChanged', content: markdown }, '*');
+    }, 300);
+  }, []);
+
+  const onPeerCountChange = useCallback((count: number) => setPeerCount(count), []);
+  const onConnectedChange = useCallback((connected: boolean) => setCollabConnected(connected), []);
+
+  // Reset collab-dependent state when leaving collab mode
+  useEffect(() => {
+    if (!collabReady) {
+      setPeerCount(0);
+      setCollabConnected(false);
+    }
+  }, [collabReady]);
+
+  // Send collabStatus to VSCode whenever collab state or peer count changes
+  useEffect(() => {
+    window.parent.postMessage({
+      type: 'collabStatus',
+      active: collabReady,
+      peerCount: collabReady ? peerCount : 0,
+    }, '*');
+  }, [collabReady, peerCount]);
+
+  // --- Message handler ---
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       const data = event.data as IncomingMessage | null;
@@ -198,49 +407,46 @@ export default function EmbedPage() {
           }
 
           // If the extension provided a GitHub token, exchange it for a session
-          // BEFORE setting initialized — so repo resolution waits for the cookie
+          // and a signed auth token BEFORE setting initialized — so repo
+          // resolution has the auth token available.
           if (data.githubToken) {
             const exchangePromise = exchangeGithubToken(data.githubToken);
             tokenExchangeRef.current = exchangePromise;
-            void exchangePromise.then((userInfo) => {
+            void exchangePromise.then((result) => {
               tokenExchangeRef.current = null;
-              if (userInfo) setUser(userInfo);
+              if (result) {
+                setUser(result.user);
+                setAuthToken(result.authToken);
+              }
               setInitialized(true);
             });
           } else {
             setInitialized(true);
           }
 
-          // Set editor content
-          if (editor) {
-            updatingFromParentRef.current = true;
-            (editor.commands as unknown as { setContent: (value: string, options?: { contentType?: string }) => boolean })
-              .setContent(data.content, { contentType: 'markdown' });
-            updatingFromParentRef.current = false;
-          }
+          // If editor already exists (re-init), update it
+          applyContentUpdateRef.current?.(data.content);
           break;
         }
 
         case 'contentUpdate': {
-          if (!editor) break;
+          // In collab mode, Yjs is the source of truth — ignore external file changes
+          if (collabReadyRef.current) break;
 
-          const currentMd = getEditorMarkdown(editor);
-          if (currentMd === data.content) break;
+          if (data.content === lastSentContentRef.current) break;
 
-          updatingFromParentRef.current = true;
           lastSentContentRef.current = data.content;
           setContent(data.content);
-          (editor.commands as unknown as { setContent: (value: string, options?: { contentType?: string }) => boolean })
-            .setContent(data.content, { contentType: 'markdown' });
-          updatingFromParentRef.current = false;
+          applyContentUpdateRef.current?.(data.content);
           break;
         }
 
         case 'githubToken': {
           // Token arrived from the extension after user clicked login
-          void exchangeGithubToken(data.githubToken).then((userInfo) => {
-            if (userInfo) {
-              setUser(userInfo);
+          void exchangeGithubToken(data.githubToken).then((result) => {
+            if (result) {
+              setUser(result.user);
+              setAuthToken(result.authToken);
               setRepoStatus('loading');
               // Re-trigger repo resolution
               setRepoMeta((prev) => prev ? { ...prev } : prev);
@@ -253,14 +459,14 @@ export default function EmbedPage() {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [editor]);
+  }, []);
 
   // Send 'ready' message to parent on mount
   useEffect(() => {
     window.parent.postMessage({ type: 'ready' }, '*');
   }, []);
 
-  // Repo mode: resolve file via /api/open
+  // --- Repo resolution + collab token fetch ---
   useEffect(() => {
     if (mode !== 'repo' || !repoMeta || !initialized) return;
 
@@ -278,8 +484,14 @@ export default function EmbedPage() {
           repo: repoMeta!.repo,
           path: repoMeta!.path,
         });
-        const res = await fetch(`/api/open?${params.toString()}`);
-        const data = await res.json() as { error?: string; repoId?: string; mdFileId?: string };
+        // Pass the auth token via Authorization header — session cookies are
+        // blocked in VSCode webview iframes (third-party cookie restrictions).
+        const headers: HeadersInit = {};
+        if (authTokenRef.current) {
+          headers['Authorization'] = `Bearer ${authTokenRef.current}`;
+        }
+        const res = await fetch(`/api/open?${params.toString()}`, { headers });
+        const data = await res.json() as { error?: string; repoId?: string; mdFileId?: string; contentHash?: string };
 
         if (!active) return;
 
@@ -294,6 +506,10 @@ export default function EmbedPage() {
         }
 
         setRepoStatus('connected');
+        setMdFileId(data.mdFileId);
+        setContentHash(data.contentHash ?? null);
+        // authToken from the token exchange doubles as the Hocuspocus collab
+        // token — no separate /api/auth/collab-token fetch needed.
       } catch {
         if (active) setRepoStatus('error');
       }
@@ -303,20 +519,23 @@ export default function EmbedPage() {
     return () => { active = false; };
   }, [mode, repoMeta, initialized]);
 
+  // --- Callbacks ---
   const onLoginClick = useCallback(() => {
-    // Ask the VSCode extension to prompt for GitHub auth
     window.parent.postMessage({ type: 'requestLogin' }, '*');
   }, []);
 
   const onCopyMarkdown = useCallback(() => {
-    const md = editor ? (getEditorMarkdown(editor) ?? content) : content;
-    if (copyToClipboard(md)) {
+    if (copyToClipboard(content)) {
       setStatusMessage('Markdown copied.');
     } else {
       setStatusMessage('Could not copy.');
     }
     setTimeout(() => setStatusMessage(null), 2000);
-  }, [content, editor]);
+  }, [content]);
+
+  const onToggleCollab = useCallback(() => {
+    setCollabEnabled((prev) => !prev);
+  }, []);
 
   // Share menu dismiss on click-outside and Escape
   useEffect(() => {
@@ -349,18 +568,17 @@ export default function EmbedPage() {
     setShareMenuOpen(false);
   }, [shareBusy]);
 
-  const onShareMenuAction = useCallback(async (mode: 'view' | 'edit' | 'markdown_url') => {
+  const onShareMenuAction = useCallback(async (shareMode: 'view' | 'edit' | 'markdown_url') => {
     if (shareBusy) return;
     setShareBusy(true);
     try {
       let snapshot = shareLinkSnapshotRef.current;
       if (!snapshot) {
         setStatusMessage('Creating share link...');
-        const md = editor ? (getEditorMarkdown(editor) ?? content) : content;
         const response = await fetch('/api/anon-share/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: 'shared.md', content: md }),
+          body: JSON.stringify({ fileName: 'shared.md', content }),
         });
         const data = (await response.json().catch(() => null)) as
           | { viewUrl?: string; editUrl?: string; error?: string }
@@ -376,17 +594,17 @@ export default function EmbedPage() {
         shareLinkSnapshotRef.current = snapshot;
       }
 
-      const url = mode === 'edit'
+      const url = shareMode === 'edit'
         ? snapshot.editUrl
-        : mode === 'markdown_url'
+        : shareMode === 'markdown_url'
           ? snapshot.markdownUrl
           : snapshot.viewUrl;
 
       if (copyToClipboard(url)) {
         setStatusMessage(
-          mode === 'edit'
+          shareMode === 'edit'
             ? 'Edit share link copied.'
-            : mode === 'markdown_url'
+            : shareMode === 'markdown_url'
               ? 'Raw URL copied.'
               : 'View share link copied.',
         );
@@ -400,23 +618,22 @@ export default function EmbedPage() {
       setShareMenuOpen(false);
     }
     setTimeout(() => setStatusMessage(null), 3000);
-  }, [content, editor, shareBusy]);
+  }, [content, shareBusy]);
 
-  if (!editor) {
-    return (
-      <main className="withmd-bg withmd-page withmd-stage">
-        <section className="withmd-doc-shell">
-          <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill withmd-anon-share-panel">
-            <div className="withmd-doc-scroll">
-              <div className="withmd-landing-inner">
-                <p className="withmd-muted-sm">Loading editor...</p>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-    );
-  }
+  // --- Status bar text ---
+  const statusBarText = (() => {
+    if (mode !== 'repo') return null;
+    if (repoStatus === 'loading') return 'Connecting...';
+    if (repoStatus === 'connected' && collabReady && collabConnected) return `Live editing \u2014 ${repoMeta?.owner}/${repoMeta?.repo}`;
+    if (repoStatus === 'connected' && collabReady && !collabConnected) return 'Connecting to live session...';
+    if (repoStatus === 'connected') return `${repoMeta?.owner}/${repoMeta?.repo}`;
+    if (repoStatus === 'not_found') return 'Repo not connected in with.md';
+    if (repoStatus === 'unauthenticated') return 'Log in for collaboration';
+    if (repoStatus === 'error') return 'Offline \u2014 editing locally';
+    return null;
+  })();
+
+  // --- Render ---
 
   if (!initialized) {
     return (
@@ -525,6 +742,21 @@ export default function EmbedPage() {
                   </div>
                 ) : null}
               </div>
+              {/* Live/Local toggle — visible in repo mode when authenticated + connected */}
+              {showCollabToggle && (
+                <button
+                  type="button"
+                  className={modeClass(collabReady)}
+                  onClick={onToggleCollab}
+                  aria-label={collabReady ? 'Live Editing' : 'Local Editing'}
+                  disabled={!collabPrerequisitesMet}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4.93 2.93l1.41 1.41A8 8 0 0 0 4 10a8 8 0 0 0 2.34 5.66l-1.41 1.41A10 10 0 0 1 2 10c0-2.76 1.12-5.26 2.93-7.07zm14.14 0A10 10 0 0 1 22 10a10 10 0 0 1-2.93 7.07l-1.41-1.41A8 8 0 0 0 20 10a8 8 0 0 0-2.34-5.66l1.41-1.41zM7.76 5.76l1.41 1.41A4 4 0 0 0 8 10a4 4 0 0 0 1.17 2.83l-1.41 1.41A6 6 0 0 1 6 10a6 6 0 0 1 1.76-4.24zm8.48 0A6 6 0 0 1 18 10a6 6 0 0 1-1.76 4.24l-1.41-1.41A4 4 0 0 0 16 10a4 4 0 0 0-1.17-2.83l1.41-1.41zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm-1 2h2v8h-2v-8z" />
+                  </svg>
+                  <span className="withmd-dock-tooltip">{collabReady ? 'Live Editing' : collabPrerequisitesMet ? 'Local Editing' : 'Connecting...'}</span>
+                </button>
+              )}
               {/* Theme */}
               <button type="button" className="withmd-dock-btn" onClick={toggleTheme} aria-label="Toggle theme">
                 <svg className="withmd-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
@@ -560,6 +792,9 @@ export default function EmbedPage() {
                           alt={user.login}
                           style={{ width: 22, height: 22, borderRadius: '50%' }}
                         />
+                        {collabReady && peerCount > 0 && (
+                          <span className="withmd-presence-badge">{peerCount}</span>
+                        )}
                       </span>
                     )}
                     <span className="withmd-muted-xs">{user.login}</span>
@@ -572,15 +807,9 @@ export default function EmbedPage() {
                 <span className="withmd-muted-xs withmd-dock-status withmd-anon-share-status">{statusMessage}</span>
               </div>
             )}
-            {mode === 'repo' && !statusMessage && (
+            {statusBarText && !statusMessage && (
               <div className="withmd-row withmd-gap-2 withmd-mt-2 withmd-dock-meta withmd-anon-share-status-wrap">
-                <span className="withmd-muted-xs withmd-dock-status withmd-anon-share-status">
-                  {repoStatus === 'loading' && 'Connecting...'}
-                  {repoStatus === 'connected' && `${repoMeta?.owner}/${repoMeta?.repo}`}
-                  {repoStatus === 'not_found' && 'Repo not connected in with.md'}
-                  {repoStatus === 'unauthenticated' && 'Log in for collaboration'}
-                  {repoStatus === 'error' && 'Offline — editing locally'}
-                </span>
+                <span className="withmd-muted-xs withmd-dock-status withmd-anon-share-status">{statusBarText}</span>
               </div>
             )}
           </header>
@@ -592,13 +821,27 @@ export default function EmbedPage() {
                   <pre className="withmd-source-readonly withmd-editor-scroll withmd-fill">{content}</pre>
                 </div>
               </div>
+            ) : collabReady ? (
+              <CollabEmbedEditor
+                key={`${mdFileId}:${contentHash}`}
+                mdFileId={mdFileId!}
+                contentHash={contentHash!}
+                collabToken={authToken!}
+                userName={collabUserName}
+                userColor={collabUserColor}
+                formatBarOpen={formatBarOpen}
+                onContentChange={onContentChange}
+                onPeerCountChange={onPeerCountChange}
+                onConnectedChange={onConnectedChange}
+              />
             ) : (
-              <div className="withmd-anon-editor-wrap withmd-fill">
-                {formatBarOpen && <FormatToolbar editor={editor} />}
-                <div className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill">
-                  <EditorContent editor={editor} />
-                </div>
-              </div>
+              <LocalEditor
+                key="local"
+                initialContent={content}
+                formatBarOpen={formatBarOpen}
+                onContentChange={onContentChange}
+                applyContentUpdateRef={applyContentUpdateRef}
+              />
             )}
           </div>
         </div>
