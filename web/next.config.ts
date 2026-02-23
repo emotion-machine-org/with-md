@@ -18,6 +18,16 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Block framing on all routes except /embed
+        source: '/((?!embed).*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+        ],
+      },
     ];
   },
 };
