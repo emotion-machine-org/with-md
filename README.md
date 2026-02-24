@@ -285,6 +285,11 @@ Create `web/.env.local`:
 ```env
 NEXT_PUBLIC_CONVEX_URL=https://<your-deployment>.convex.cloud
 NEXT_PUBLIC_HOCUSPOCUS_URL=ws://localhost:3001
+NEXT_PUBLIC_POSTHOG_ENABLED=0
+NEXT_PUBLIC_POSTHOG_TOKEN=
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+NEXT_PUBLIC_POSTHOG_AUTOCAPTURE=0
+NEXT_PUBLIC_POSTHOG_RECORDING=0
 
 GITHUB_APP_ID=<your-github-app-id>
 GITHUB_APP_PRIVATE_KEY=<your-github-app-private-key>
@@ -327,6 +332,11 @@ The app will be available at `http://localhost:4040`.
 |----------|-------------|
 | `NEXT_PUBLIC_CONVEX_URL` | Convex deployment URL |
 | `NEXT_PUBLIC_HOCUSPOCUS_URL` | WebSocket URL for Hocuspocus (e.g., `ws://localhost:3001`) |
+| `NEXT_PUBLIC_POSTHOG_ENABLED` | Set to `1` to enable PostHog client analytics |
+| `NEXT_PUBLIC_POSTHOG_TOKEN` | PostHog project token (public/client token) |
+| `NEXT_PUBLIC_POSTHOG_HOST` | PostHog host or reverse-proxy host (default: `https://us.i.posthog.com`) |
+| `NEXT_PUBLIC_POSTHOG_AUTOCAPTURE` | Set to `1` to enable PostHog autocapture (default: off) |
+| `NEXT_PUBLIC_POSTHOG_RECORDING` | Set to `1` to enable session recordings (default: off) |
 | `GITHUB_APP_ID` | GitHub App ID |
 | `GITHUB_APP_PRIVATE_KEY` | GitHub App private key (PEM) |
 | `GITHUB_CLIENT_ID` | GitHub OAuth client ID |
@@ -352,6 +362,23 @@ The app will be available at `http://localhost:4040`.
 | Variable | Description |
 |----------|-------------|
 | `HOCUSPOCUS_CONVEX_SECRET` | Must match the Hocuspocus server secret |
+
+## Optional Product Analytics (PostHog)
+
+with.md includes a client-side PostHog bootstrap in `web/src/instrumentation-client.ts`.
+It is OSS-safe by default:
+
+- Analytics is disabled unless `NEXT_PUBLIC_POSTHOG_ENABLED=1`.
+- No token is hardcoded in the repository.
+- Autocapture and session recording are both off by default.
+
+For production:
+
+1. Set `NEXT_PUBLIC_POSTHOG_ENABLED=1`.
+2. Set `NEXT_PUBLIC_POSTHOG_TOKEN` and `NEXT_PUBLIC_POSTHOG_HOST`.
+3. Optionally enable `NEXT_PUBLIC_POSTHOG_AUTOCAPTURE=1` and/or `NEXT_PUBLIC_POSTHOG_RECORDING=1`.
+
+If you use a reverse proxy for PostHog, point `NEXT_PUBLIC_POSTHOG_HOST` to the proxied endpoint.
 
 ## Optional Private Font Override
 
