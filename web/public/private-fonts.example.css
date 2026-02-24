@@ -1,0 +1,70 @@
+/*
+  Optional private font override.
+  Copy this file to `web/public/private-fonts.css` for internal deployments.
+  This file is gitignored and should never be committed.
+
+  Enable loading by setting:
+  WITHMD_ENABLE_PRIVATE_FONTS=1
+*/
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/private/FunktionalGrotesk-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/private/FunktionalGrotesk-Book.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/private/FunktionalGrotesk-Regular.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/private/FunktionalGrotesk-Medium.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/private/FunktionalGrotesk-Semibold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Funktional Grotesk';
+  src: url('/fonts/private/FunktionalGrotesk-Bold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Mono';
+  src: url('/fonts/private/SFMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --withmd-font-sans: 'Funktional Grotesk', 'Public Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --withmd-font-mono: 'SF Mono', 'Server Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+}

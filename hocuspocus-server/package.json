@@ -1,0 +1,23 @@
+{
+  "name": "with-md-hocuspocus-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx src/index.ts",
+    "start": "node --env-file=.env dist/index.js"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^2.13.6",
+    "@tiptap/core": "^3.0.0",
+    "@tiptap/markdown": "^3.0.0",
+    "@tiptap/starter-kit": "^3.0.0",
+    "@types/node": "^25.2.3",
+    "y-prosemirror": "^1.2.6",
+    "yjs": "^13.6.24"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
