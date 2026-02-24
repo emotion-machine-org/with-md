@@ -205,7 +205,7 @@ export default function Home() {
               <div className="withmd-landing-inner">
                 <h1 className="withmd-landing-title">Collaborate with.md files</h1>
                 <p className="withmd-landing-tagline">
-                  Markdown-native collaboration for humans and agents.
+                  Open-source markdown-native collaboration for humans and agents.
                 </p>
 
                 <hr className="withmd-landing-rule withmd-landing-anon-divider" />
