@@ -768,6 +768,13 @@
   background: var(--withmd-glass-scrollbar);
 }
 
+.withmd-editor-scroll .withmd-prose,
+.withmd-editor-scroll .ProseMirror {
+  box-sizing: border-box;
+  width: calc(100% + var(--withmd-editor-scrollbar-width));
+  max-width: none;
+}
+
 
 .withmd-comment-highlight {
   background: var(--withmd-comment);
