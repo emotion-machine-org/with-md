@@ -7,7 +7,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing GITHUB_CLIENT_ID' }, { status: 500 });
   }
 
-  const state = crypto.randomUUID();
+  const isPopup = req.nextUrl.searchParams.get('popup') === '1';
+  const nonce = crypto.randomUUID();
+  // Encode the popup flag into the state so the callback can detect it
+  const state = isPopup ? `${nonce}:popup` : nonce;
 
   const cookieStore = await cookies();
   cookieStore.set('github_oauth_state', state, {

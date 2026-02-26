@@ -78,6 +78,22 @@ export async function GET(req: NextRequest) {
   session.avatarUrl = ghUser.avatar_url;
   await session.save();
 
+  // Check if this was a popup OAuth flow (state ends with ":popup")
+  const isPopup = state.endsWith(':popup');
+
+  if (isPopup) {
+    // Return a small HTML page that notifies the opener and closes itself
+    return new NextResponse(
+      `<!DOCTYPE html>
+<html><head><title>Auth complete</title></head>
+<body><script>
+  if (window.opener) { window.opener.postMessage({ type: 'authComplete' }, '*'); }
+  window.close();
+</script><p>Authenticated. You can close this window.</p></body></html>`,
+      { headers: { 'Content-Type': 'text/html' } },
+    );
+  }
+
   // Redirect to workspace — use Host header since req.nextUrl.origin can reflect
   // the bind address (0.0.0.0) rather than the actual hostname the user is on
   const host = req.headers.get('host') ?? 'localhost:4040';

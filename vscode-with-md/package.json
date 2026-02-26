@@ -1,0 +1,61 @@
+{
+  "name": "with-md",
+  "displayName": "with.md Editor",
+  "description": "Rich markdown editor powered by with.md",
+  "version": "0.1.0",
+  "publisher": "EmotionMachine",
+  "icon": "with-md-logo.jpg",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/emotion-machine-org/with-md.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "editor",
+    "collaboration",
+    "with.md",
+    "github"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "with-md.markdownEditor",
+        "displayName": "with.md Editor",
+        "selector": [
+          { "filenamePattern": "*.md" },
+          { "filenamePattern": "*.markdown" }
+        ],
+        "priority": "default"
+      }
+    ],
+    "configuration": {
+      "title": "with.md",
+      "properties": {
+        "with-md.baseUrl": {
+          "type": "string",
+          "default": "https://with.md",
+          "description": "Base URL for the with.md web app"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "typescript": "^5.3.0"
+  }
+}

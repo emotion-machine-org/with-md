@@ -47,7 +47,7 @@ describe('GET /api/github/branches', () => {
   let GET: (req: NextRequest) => Promise<Response>;
 
   beforeEach(async () => {
-    ({ GET } = await import('@/app/api/github/branches/route'));
+    ({ GET } = await import('@/app/(main)/api/github/branches/route'));
     mockListInstallationRepos.mockResolvedValue([
       {
         installationId: 1,
@@ -169,7 +169,7 @@ describe('GET /api/github/repos', () => {
   let GET: () => Promise<Response>;
 
   beforeEach(async () => {
-    ({ GET } = await import('@/app/api/github/repos/route'));
+    ({ GET } = await import('@/app/(main)/api/github/repos/route'));
   });
 
   it('valid token → returns repos', async () => {
