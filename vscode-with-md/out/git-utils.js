@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.detectGitHubRepo = detectGitHubRepo;
+exports.getGitHeadContent = getGitHeadContent;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 /**
@@ -103,5 +104,28 @@ function detectGitHubRepo(fileUri) {
         repo: parsed.repo,
         path: relativePath,
     };
+}
+/**
+ * Get the content of a file at git HEAD.
+ * Returns null if the file is not in a git repo or doesn't exist at HEAD.
+ */
+async function getGitHeadContent(fileUri) {
+    const gitExtension = vscode.extensions.getExtension('vscode.git');
+    if (!gitExtension?.isActive) {
+        return null;
+    }
+    const git = gitExtension.exports.getAPI(1);
+    const filePath = fileUri.fsPath;
+    const repo = git.repositories.find(r => filePath.startsWith(r.rootUri.fsPath));
+    if (!repo) {
+        return null;
+    }
+    const relativePath = path.relative(repo.rootUri.fsPath, filePath).split(path.sep).join('/');
+    try {
+        return await repo.show('HEAD', relativePath);
+    }
+    catch {
+        return null;
+    }
 }
 //# sourceMappingURL=git-utils.js.map

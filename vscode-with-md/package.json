@@ -3,7 +3,8 @@
   "displayName": "with.md Editor",
   "description": "Rich markdown editor powered by with.md",
   "version": "0.1.0",
-  "publisher": "emotion-machine",
+  "publisher": "EmotionMachine",
+  "icon": "with-md-logo.jpg",
   "repository": {
     "type": "git",
     "url": "https://github.com/emotion-machine-org/with-md.git"
@@ -14,6 +15,13 @@
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "editor",
+    "collaboration",
+    "with.md",
+    "github"
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
@@ -34,7 +42,7 @@
       "properties": {
         "with-md.baseUrl": {
           "type": "string",
-          "default": " http://localhost:4040",
+          "default": "https://with.md",
           "description": "Base URL for the with.md web app"
         }
       }

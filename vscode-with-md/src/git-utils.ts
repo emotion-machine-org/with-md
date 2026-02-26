@@ -10,6 +10,7 @@ interface GitRepo {
       pushUrl?: string;
     }>;
   };
+  show(ref: string, filePath: string): Promise<string>;
 }
 
 interface GitExtensionApi {
@@ -99,4 +100,30 @@ export function detectGitHubRepo(fileUri: vscode.Uri): RepoInfo | null {
     repo: parsed.repo,
     path: relativePath,
   };
+}
+
+/**
+ * Get the content of a file at git HEAD.
+ * Returns null if the file is not in a git repo or doesn't exist at HEAD.
+ */
+export async function getGitHeadContent(fileUri: vscode.Uri): Promise<string | null> {
+  const gitExtension = vscode.extensions.getExtension<{ getAPI(version: number): GitExtensionApi }>('vscode.git');
+  if (!gitExtension?.isActive) {
+    return null;
+  }
+
+  const git = gitExtension.exports.getAPI(1);
+  const filePath = fileUri.fsPath;
+  const repo = git.repositories.find(r => filePath.startsWith(r.rootUri.fsPath));
+  if (!repo) {
+    return null;
+  }
+
+  const relativePath = path.relative(repo.rootUri.fsPath, filePath).split(path.sep).join('/');
+
+  try {
+    return await repo.show('HEAD', relativePath);
+  } catch {
+    return null;
+  }
 }

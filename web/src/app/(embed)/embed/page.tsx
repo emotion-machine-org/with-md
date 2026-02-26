@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EditorContent, useEditor } from '@tiptap/react';
+import { MultiFileDiff } from '@pierre/diffs/react';
 import * as Y from 'yjs';
 
 import FormatToolbar from '@/components/with-md/format-toolbar';
@@ -32,7 +33,12 @@ interface GithubTokenMessage {
   githubToken: string;
 }
 
-type IncomingMessage = InitMessage | ContentUpdateMessage | GithubTokenMessage;
+interface DiffContentMessage {
+  type: 'diffContent';
+  content: string | null;
+}
+
+type IncomingMessage = InitMessage | ContentUpdateMessage | GithubTokenMessage | DiffContentMessage;
 
 interface UserInfo {
   login: string;
@@ -105,6 +111,19 @@ function toggleTheme() {
   const next = current === 'light' ? 'dark' : 'light';
   html.setAttribute('data-theme', next);
   try { localStorage.setItem('withmd-theme', next); } catch { /* noop */ }
+}
+
+const BG_COUNT = 11;
+
+function cycleBackground(): number {
+  let current = 0;
+  try {
+    current = parseInt(localStorage.getItem('withmd-bg') ?? '0', 10) || 0;
+  } catch { /* noop */ }
+  const next = (current + 1) % BG_COUNT;
+  document.documentElement.setAttribute('data-bg', String(next));
+  try { localStorage.setItem('withmd-bg', String(next)); } catch { /* noop */ }
+  return next;
 }
 
 function toMarkdownRawUrl(viewUrl: string): string {
@@ -321,6 +340,14 @@ export default function EmbedPage() {
   const [content, setContent] = useState('');
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffOriginalContent, setDiffOriginalContent] = useState<string | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffTheme, setDiffTheme] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light'
+      ? 'pierre-light'
+      : 'pierre-dark',
+  );
 
   // --- Collab state ---
   const [mdFileId, setMdFileId] = useState<string | null>(null);
@@ -329,7 +356,7 @@ export default function EmbedPage() {
   // header) and as the Hocuspocus collab token.  Avoids reliance on session cookies
   // which are blocked in VSCode webview iframes.
   const [authToken, setAuthToken] = useState<string | null>(null);
-  const [collabEnabled, setCollabEnabled] = useState(true);
+  const [collabEnabled, setCollabEnabled] = useState(false);
   const [peerCount, setPeerCount] = useState(0);
   const [collabConnected, setCollabConnected] = useState(false);
 
@@ -441,6 +468,20 @@ export default function EmbedPage() {
           break;
         }
 
+        case 'diffContent': {
+          setDiffLoading(false);
+          if (data.content !== null) {
+            setDiffOriginalContent(data.content);
+            setDiffOpen(true);
+          } else {
+            setDiffOriginalContent(null);
+            setDiffOpen(false);
+            setStatusMessage('No git version available for diff.');
+            setTimeout(() => setStatusMessage(null), 3000);
+          }
+          break;
+        }
+
         case 'githubToken': {
           // Token arrived from the extension after user clicked login
           void exchangeGithubToken(data.githubToken).then((result) => {
@@ -459,6 +500,16 @@ export default function EmbedPage() {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Track theme changes for the diff viewer
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const light = document.documentElement.getAttribute('data-theme') === 'light';
+      setDiffTheme(light ? 'pierre-light' : 'pierre-dark');
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
   }, []);
 
   // Send 'ready' message to parent on mount
@@ -523,6 +574,19 @@ export default function EmbedPage() {
   const onLoginClick = useCallback(() => {
     window.parent.postMessage({ type: 'requestLogin' }, '*');
   }, []);
+
+  const onRevert = useCallback(() => {
+    window.parent.postMessage({ type: 'requestRevert' }, '*');
+  }, []);
+
+  const onDiffToggle = useCallback(() => {
+    if (diffOpen) {
+      setDiffOpen(false);
+      return;
+    }
+    setDiffLoading(true);
+    window.parent.postMessage({ type: 'requestDiff' }, '*');
+  }, [diffOpen]);
 
   const onCopyMarkdown = useCallback(() => {
     if (copyToClipboard(content)) {
@@ -653,7 +717,7 @@ export default function EmbedPage() {
 
   return (
     <main className="withmd-bg withmd-page withmd-stage">
-      <section className="withmd-doc-shell">
+      <section className={`withmd-doc-shell${diffOpen ? ' withmd-doc-shell-diff' : ''}`}>
         <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill withmd-anon-share-panel">
           <header className="withmd-dock-wrap withmd-anon-share-toolbar">
             <div className="withmd-dock">
@@ -693,6 +757,32 @@ export default function EmbedPage() {
                   <path d="M16 1a2 2 0 0 1 2 2v2h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-2H5a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h11Zm-8 18v2h11V7H8v12Zm8-16H5v14h1V7a2 2 0 0 1 2-2h8V3Z" />
                 </svg>
                 <span className="withmd-dock-tooltip">Copy Markdown</span>
+              </button>
+              {/* Revert */}
+              <button
+                type="button"
+                className="withmd-dock-btn"
+                onClick={onRevert}
+                aria-label="Revert to git version"
+                disabled={collabReady}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5.828 7l2.536-2.536L6.95 3.05 2 8l4.95 4.95 1.414-1.414L5.828 9H13a5 5 0 0 1 0 10h-4v2h4a7 7 0 0 0 0-14H5.828z" />
+                </svg>
+                <span className="withmd-dock-tooltip">Revert to git version</span>
+              </button>
+              {/* Diff */}
+              <button
+                type="button"
+                className={modeClass(diffOpen)}
+                onClick={onDiffToggle}
+                aria-label="Show diff against git HEAD"
+                disabled={diffLoading || collabReady}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 7h3V4h2v3h3v2H11v3H9V9H6V7zm6 8h6v2h-6v-2zM3 3h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm10 8h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z" />
+                </svg>
+                <span className="withmd-dock-tooltip">{diffLoading ? 'Loading...' : 'Diff'}</span>
               </button>
               {/* Share */}
               <div className="withmd-share-menu-wrap withmd-dock-share-wrap" ref={shareMenuRef}>
@@ -757,6 +847,13 @@ export default function EmbedPage() {
                   <span className="withmd-dock-tooltip">{collabReady ? 'Live Editing' : collabPrerequisitesMet ? 'Local Editing' : 'Connecting...'}</span>
                 </button>
               )}
+              {/* Background */}
+              <button type="button" className="withmd-dock-btn" onClick={cycleBackground} aria-label="Change background">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-5.5z" />
+                </svg>
+                <span className="withmd-dock-tooltip">Change Background</span>
+              </button>
               {/* Theme */}
               <button type="button" className="withmd-dock-btn" onClick={toggleTheme} aria-label="Toggle theme">
                 <svg className="withmd-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
@@ -815,7 +912,19 @@ export default function EmbedPage() {
           </header>
 
           <div className="withmd-doc-stage withmd-fill">
-            {sourceMode ? (
+            {diffOpen && diffOriginalContent !== null ? (
+              <div className="withmd-diff-viewer">
+                <MultiFileDiff
+                  oldFile={{ name: repoMeta?.path ?? 'document.md', contents: diffOriginalContent }}
+                  newFile={{ name: repoMeta?.path ?? 'document.md', contents: content }}
+                  options={{ theme: diffTheme, diffStyle: 'split' }}
+                />
+              </div>
+            ) : diffOpen && diffLoading ? (
+              <div className="withmd-diff-loading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <span className="withmd-muted-xs">Loading diff...</span>
+              </div>
+            ) : sourceMode ? (
               <div className="withmd-column withmd-fill withmd-gap-2">
                 <div className="withmd-editor-shell withmd-column withmd-fill">
                   <pre className="withmd-source-readonly withmd-editor-scroll withmd-fill">{content}</pre>

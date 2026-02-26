@@ -49,12 +49,12 @@ function getWebviewHtml(webview) {
         if (!data || !data.type) return;
 
         // Messages from the iframe → forward to the extension host
-        if (data.type === 'ready' || data.type === 'contentChanged' || data.type === 'requestLogin' || data.type === 'collabStatus') {
+        if (data.type === 'ready' || data.type === 'contentChanged' || data.type === 'requestLogin' || data.type === 'collabStatus' || data.type === 'requestRevert' || data.type === 'requestDiff') {
           vscode.postMessage(data);
         }
 
         // Messages from the extension host → forward to the iframe
-        if (data.type === 'init' || data.type === 'contentUpdate' || data.type === 'githubToken') {
+        if (data.type === 'init' || data.type === 'contentUpdate' || data.type === 'githubToken' || data.type === 'diffContent') {
           iframe.contentWindow.postMessage(data, '*');
         }
       });
