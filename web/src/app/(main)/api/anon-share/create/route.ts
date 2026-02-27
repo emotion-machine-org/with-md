@@ -47,7 +47,7 @@ function hashIp(value: string): string {
 }
 
 function generateShortId(): string {
-  return randomBytes(5).toString('base64url');
+  return randomBytes(5).toString('base64url').toLowerCase();
 }
 
 function generateEditSecret(): string {
