@@ -11,7 +11,7 @@ function hashScoped(scope: string, value: string): string {
 }
 
 export function generateRepoShareShortId(): string {
-  return randomBytes(SHORT_ID_BYTES).toString('base64url');
+  return randomBytes(SHORT_ID_BYTES).toString('base64url').toLowerCase();
 }
 
 export function generateRepoShareEditSecret(): string {
