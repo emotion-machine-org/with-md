@@ -384,6 +384,50 @@ export const loadDocument = internalQuery({
   },
 });
 
+export const updateViaApi = internalMutation({
+  args: {
+    shortId: v.string(),
+    editSecret: v.string(),
+    content: v.string(),
+    title: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const share = await getActiveShareByShortId(ctx, args.shortId);
+    if (!share) return { ok: false as const, reason: 'missing' as const };
+
+    const allowed = await canEditShare(share, args.editSecret);
+    if (!allowed) return { ok: false as const, reason: 'forbidden' as const };
+
+    const normalized = args.content.replace(/\r\n/g, '\n');
+    const sizeBytes = markdownByteLength(normalized);
+    if (sizeBytes > ANON_REALTIME_MAX_BYTES) return { ok: false as const, reason: 'too_large' as const };
+
+    const syntax = detectUnsupportedSyntax(normalized);
+    const contentHash = hashContent(normalized);
+    const now = Date.now();
+    const nextTitle = args.title !== undefined ? args.title : share.title;
+
+    await ctx.db.patch(share._id, {
+      content: normalized,
+      contentHash,
+      sizeBytes,
+      title: nextTitle,
+      syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+      syntaxSupportReasons: syntax.reasons,
+      updatedAt: now,
+    });
+
+    return {
+      ok: true as const,
+      shortId: args.shortId,
+      title: nextTitle,
+      contentHash,
+      sizeBytes,
+      updatedAt: now,
+    };
+  },
+});
+
 export const storeDocument = internalMutation({
   args: {
     documentName: v.string(),

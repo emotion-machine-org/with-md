@@ -1,3 +1,4 @@
+import type { IncomingMessage } from 'http';
 import { Server } from '@hocuspocus/server';
 import { getSchema } from '@tiptap/core';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
@@ -290,6 +291,28 @@ function markdownByteLength(markdown: string): number {
   return textEncoder.encode(markdown).byteLength;
 }
 
+const MAX_REQUEST_BODY_BYTES = 1024 * 1024; // 1MB
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    req.on('data', (chunk: Buffer) => {
+      totalBytes += chunk.byteLength;
+      if (totalBytes > MAX_REQUEST_BODY_BYTES) {
+        req.destroy();
+        const err = new Error('Payload too large');
+        (err as NodeJS.ErrnoException).code = 'PAYLOAD_TOO_LARGE';
+        reject(err);
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
 function shouldLog(key: string, throttleMs: number): boolean {
   const now = Date.now();
   const prev = lastLogAtByKey.get(key) ?? 0;
@@ -466,6 +489,94 @@ const server = Server.configure({
   port: Number(process.env.PORT ?? 3001),
   debounce: 3000,
   maxDebounce: 10000,
+
+  async onRequest({ request, response, instance }) {
+    const urlPath = (() => {
+      try {
+        return new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`).pathname;
+      } catch {
+        return request.url ?? '/';
+      }
+    })();
+
+    if (request.method !== 'POST' || urlPath !== '/api/agent/edit') {
+      return;
+    }
+
+    const sendJson = (status: number, data: unknown): void => {
+      if (!response.headersSent) {
+        response.writeHead(status, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify(data));
+      }
+    };
+
+    let body: Record<string, unknown>;
+    try {
+      const raw = await readBody(request);
+      body = JSON.parse(raw) as Record<string, unknown>;
+    } catch (err) {
+      if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'PAYLOAD_TOO_LARGE') {
+        sendJson(413, { ok: false, error: `Payload too large. Maximum body size is ${MAX_REQUEST_BODY_BYTES / 1024}KB.` });
+        throw undefined;
+      }
+      sendJson(400, { ok: false, error: 'Invalid JSON body' });
+      throw undefined;
+    }
+
+    const documentName = typeof body.documentName === 'string' ? body.documentName.trim() : '';
+    const editSecret = typeof body.editSecret === 'string' ? body.editSecret.trim() : '';
+    const content = typeof body.content === 'string' ? body.content : null;
+
+    if (!documentName || !editSecret || content === null) {
+      sendJson(400, { ok: false, error: 'Missing documentName, editSecret, or content' });
+      throw undefined;
+    }
+
+    // Validate edit permission via Convex
+    let authResult: { ok?: boolean; reason?: string };
+    try {
+      authResult = (await convexCall('/api/collab/authenticate', {
+        userToken: editSecret,
+        mdFileId: documentName,
+      })) as { ok?: boolean; reason?: string };
+    } catch {
+      sendJson(503, { ok: false, error: 'Auth service unavailable' });
+      throw undefined;
+    }
+
+    if (!authResult.ok) {
+      const status = authResult.reason === 'missing' ? 404 : 403;
+      sendJson(status, { ok: false, error: authResult.reason ?? 'forbidden' });
+      throw undefined;
+    }
+
+    // Apply the edit via direct server-side connection (no WebSocket needed)
+    const normalizedContent = content.replace(/\r\n/g, '\n');
+    try {
+      const connection = await instance.openDirectConnection(documentName);
+      try {
+        await connection.transact((doc) => {
+          clearDocumentState(doc);
+          bootstrapFromMarkdown(doc, normalizedContent);
+        });
+      } finally {
+        await connection.disconnect();
+      }
+    } catch (err) {
+      logErrorThrottled(
+        `agent-edit-error:${documentName}`,
+        `[with-md:hocuspocus] agent-edit doc=${documentName} path=error`,
+        err,
+      );
+      sendJson(500, { ok: false, error: 'Failed to apply edit' });
+      throw undefined;
+    }
+
+    const bytes = markdownByteLength(normalizedContent);
+    console.info(`[with-md:hocuspocus] agent-edit doc=${documentName} bytes=${bytes}`);
+    sendJson(200, { ok: true, documentName, bytes });
+    throw undefined;
+  },
 
   async onAuthenticate({ token, documentName }) {
     const result = (await convexCall('/api/collab/authenticate', {
