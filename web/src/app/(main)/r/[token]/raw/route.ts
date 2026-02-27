@@ -29,7 +29,20 @@ function textError(message: string, status: number): NextResponse {
   });
 }
 
-export async function GET(_request: Request, { params }: Params) {
+function wantsPlainText(request: Request): boolean {
+  const accept = request.headers.get('accept') || '';
+  return (
+    accept === '*/*' ||
+    accept.includes('text/plain') ||
+    accept.includes('text/markdown')
+  );
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+export async function GET(request: Request, { params }: Params) {
   const { token } = await params;
   const shortId = token.trim();
   if (!shortId) {
@@ -57,13 +70,26 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   const fileName = toSafeMarkdownFileName(file.path);
-  return new NextResponse(file.content, {
+
+  if (wantsPlainText(request)) {
+    return new NextResponse(file.content, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Disposition': `inline; filename="${fileName}"`,
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex, nofollow, noarchive',
+      },
+    });
+  }
+
+  const title = file.path.split('/').pop() || 'Shared Document';
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body><pre>${escapeHtml(file.content)}</pre></body></html>`;
+  return new NextResponse(html, {
     status: 200,
     headers: {
-      'Content-Type': 'text/markdown; charset=utf-8',
-      'Content-Disposition': `inline; filename="${fileName}"`,
+      'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
-      'X-Robots-Tag': 'noindex, nofollow, noarchive',
     },
   });
 }

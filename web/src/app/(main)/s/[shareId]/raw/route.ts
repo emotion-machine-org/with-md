@@ -28,7 +28,20 @@ function textError(message: string, status: number): NextResponse {
   });
 }
 
-export async function GET(_request: Request, { params }: Params) {
+function wantsPlainText(request: Request): boolean {
+  const accept = request.headers.get('accept') || '';
+  return (
+    accept === '*/*' ||
+    accept.includes('text/plain') ||
+    accept.includes('text/markdown')
+  );
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+export async function GET(request: Request, { params }: Params) {
   const { shareId } = await params;
   const shortId = shareId.trim();
   if (!shortId) {
@@ -47,13 +60,28 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   const fileName = toSafeMarkdownFileName(share.title);
-  return new NextResponse(share.content, {
+
+  // Programmatic clients (curl, API clients, terminal agents) send Accept: */*
+  // and get raw text. AI web browsing tools (ChatGPT, Gemini) send browser-like
+  // Accept headers and only process text/html, so we wrap in minimal HTML.
+  if (wantsPlainText(request)) {
+    return new NextResponse(share.content, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Disposition': `inline; filename="${fileName}"`,
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex, nofollow, noarchive',
+      },
+    });
+  }
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(share.title)}</title></head><body><pre>${escapeHtml(share.content)}</pre></body></html>`;
+  return new NextResponse(html, {
     status: 200,
     headers: {
-      'Content-Type': 'text/markdown; charset=utf-8',
-      'Content-Disposition': `inline; filename="${fileName}"`,
+      'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
-      'X-Robots-Tag': 'noindex, nofollow, noarchive',
     },
   });
 }
