@@ -52,8 +52,9 @@ function markdownByteLength(value: string): number {
 }
 
 function generateShortId(): string {
-  // URL-safe base64, 8 characters = 48 bits of entropy
-  return randomBytes(6).toString('base64url');
+  // URL-safe base64, 8 characters = 48 bits of entropy.
+  // Lowercase to avoid issues with AI web fetchers that normalize URLs to lowercase.
+  return randomBytes(6).toString('base64url').toLowerCase();
 }
 
 function generateEditSecret(): string {
