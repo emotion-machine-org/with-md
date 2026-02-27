@@ -48,6 +48,7 @@ export const WITH_MD_CONVEX_FUNCTIONS = {
     usersSetBackground: 'users:setBackground',
     installationsUpsert: 'installations:upsert',
     anonSharesCreate: 'anonShares:create',
+    anonSharesUpdateViaApi: 'anonShares:updateViaApi',
     anonSharesConsumeCreateQuota: 'anonShares:consumeCreateQuota',
     repoSharesCreate: 'repoShares:create',
   },
