@@ -173,4 +173,35 @@ export default defineSchema({
     .index('by_short_id_hash', ['shortIdHash'])
     .index('by_md_file', ['mdFileId'])
     .index('by_expires_at', ['expiresAt']),
+
+  webSnapshots: defineTable({
+    urlHash: v.string(),
+    normalizedUrl: v.string(),
+    displayUrl: v.string(),
+    title: v.string(),
+    markdown: v.string(),
+    markdownHash: v.string(),
+    sourceEngine: v.string(),
+    fetchedAt: v.number(),
+    staleAt: v.number(),
+    version: v.number(),
+    tokenEstimate: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+  })
+    .index('by_url_hash', ['urlHash'])
+    .index('by_stale_at', ['staleAt']),
+
+  webSnapshotVersions: defineTable({
+    snapshotId: v.id('webSnapshots'),
+    urlHash: v.string(),
+    version: v.number(),
+    normalizedUrl: v.string(),
+    markdown: v.string(),
+    markdownHash: v.string(),
+    sourceEngine: v.string(),
+    trigger: v.string(),
+    createdAt: v.number(),
+  })
+    .index('by_snapshot', ['snapshotId'])
+    .index('by_url_hash', ['urlHash']),
 });

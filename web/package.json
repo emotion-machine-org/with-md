@@ -25,6 +25,8 @@
     "iron-session": "^8.0.4",
     "jose": "^6.1.3",
     "next": "^15.1.6",
+    "node-html-parser": "^7.0.2",
+    "playwright": "^1.58.2",
     "posthog-js": "^1.353.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
