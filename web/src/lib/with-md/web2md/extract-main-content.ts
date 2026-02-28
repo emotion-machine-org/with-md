@@ -220,9 +220,30 @@ function normalizeHtml(value: string): string {
     .trim();
 }
 
-export function extractMainContent(html: string, _sourceUrl: string): ExtractedMainContent {
+function shouldKeepRawUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  if (trimmed.startsWith('#')) return true;
+  if (/^(mailto|tel|javascript|data):/i.test(trimmed)) return true;
+  return false;
+}
+
+function absolutizeHtmlUrls(html: string, baseUrl: string): string {
+  return html.replace(/\b(href|src)\s*=\s*(['"])([^'"]*)\2/gi, (match, attr, quote, rawValue) => {
+    const value = rawValue.trim();
+    if (shouldKeepRawUrl(value)) return match;
+    try {
+      const absolute = new URL(value, baseUrl).toString();
+      return `${attr}=${quote}${absolute}${quote}`;
+    } catch {
+      return match;
+    }
+  });
+}
+
+export function extractMainContent(html: string, sourceUrl: string): ExtractedMainContent {
   const cleaned = stripBoilerplateBlocks(html);
-  const selectedHtml = normalizeHtml(pickBestContentRoot(cleaned));
+  const selectedHtml = absolutizeHtmlUrls(normalizeHtml(pickBestContentRoot(cleaned)), sourceUrl);
   const text = stripTags(selectedHtml);
   const structure = collectStructureStats(selectedHtml);
   const title = pickTitle(cleaned, selectedHtml);
