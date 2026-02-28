@@ -13,7 +13,6 @@
   "dependencies": {
     "@fontsource/public-sans": "^5.2.7",
     "@hocuspocus/provider": "^2.13.6",
-    "@mozilla/readability": "^0.6.0",
     "@pierre/diffs": "^1.0.11",
     "@tiptap/core": "^3.0.0",
     "@tiptap/extension-collaboration": "^3.0.0",
@@ -26,7 +25,6 @@
     "convex": "^1.17.4",
     "iron-session": "^8.0.4",
     "jose": "^6.1.3",
-    "jsdom": "27.2.0",
     "next": "^15.1.6",
     "node-html-markdown": "^2.0.0",
     "posthog-js": "^1.353.0",
@@ -38,7 +36,6 @@
     "yjs": "^13.6.24"
   },
   "devDependencies": {
-    "@types/jsdom": "^27.0.0",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
