@@ -6,6 +6,9 @@ import { canonicalizeUrl } from '@/lib/with-md/web2md/canonicalize-url';
 import { runWeb2MdPipeline } from '@/lib/with-md/web2md/pipeline';
 import { checkWebMdRateLimit } from '@/lib/with-md/web2md/rate-limit';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 type ResolveMode = 'normal' | 'revalidate';
 
 interface WebSnapshotRecord {
