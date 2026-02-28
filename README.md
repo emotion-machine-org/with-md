@@ -45,7 +45,7 @@ with.md is an npm workspaces monorepo with three services:
 ┌──────────────────────────────────────────────────────────────────────┐
 │                     Convex (serverless backend)                      │
 │                                                                      │
-│  - Database (12 tables)       - File operations                      │
+│  - Database (14 tables)       - File operations                      │
 │  - Binary storage (Yjs)       - Collaboration auth                   │
 │  - Push queue                 - Activity tracking                    │
 │  - Comment anchoring          - Anonymous shares                     │
@@ -107,7 +107,7 @@ The serverless backend in `convex/` handles all data persistence, authentication
 
 | Module | Purpose |
 |--------|---------|
-| `schema.ts` | Database schema (12 tables) |
+| `schema.ts` | Database schema (14 tables) |
 | `mdFiles.ts` | File CRUD, GitHub sync, import/delete, oversized file handling, undo |
 | `collab.ts` | Real-time collaboration auth (token verification) and Yjs document persistence (load/store via HTTP) |
 | `http.ts` | HTTP routes consumed by Hocuspocus for document loading and storing |
@@ -142,7 +142,7 @@ The WebSocket server in `hocuspocus-server/` bridges TipTap editors via Yjs CRDT
 
 ## Database Schema
 
-12 tables in Convex:
+14 tables in Convex:
 
 | Table | Purpose | Key indexes |
 |-------|---------|-------------|
@@ -158,6 +158,8 @@ The WebSocket server in `hocuspocus-server/` bridges TipTap editors via Yjs CRDT
 | `anonShares` | Anonymous markdown shares with optional edit access | `by_short_id` |
 | `anonRateLimits` | Rate limiting for anonymous operations | `by_bucket` |
 | `repoShares` | Shareable links for repo files with expiration/revocation | `by_short_id_hash`, `by_md_file` |
+| `webSnapshots` | Latest website-to-markdown snapshot per canonical URL | `by_url_hash`, `by_stale_at` |
+| `webSnapshotVersions` | Immutable version history for URL snapshots | `by_snapshot_and_version`, `by_url_hash_and_created_at` |
 
 ## Features
 
@@ -201,6 +203,13 @@ The WebSocket server in `hocuspocus-server/` bridges TipTap editors via Yjs CRDT
 
 - **Anonymous shares** — create a sharable link to a standalone markdown document with optional edit access. Rate-limited.
 - **Repository file shares** — time-limited, revocable links to specific repo files. Uses HMAC-SHA256 signed tokens.
+
+### Website to Markdown
+
+- **URL snapshots** — open `/<target-url>` to generate and render a markdown snapshot for a public website.
+- **Versioned cache** — latest snapshot is served quickly and immutable versions are stored in `webSnapshotVersions`.
+- **Manual refresh** — append `/revalidate` or `/redo` to force a new snapshot.
+- **Fallback pipeline** — local heuristic extraction, optional OpenRouter cleanup, Jina fallback, and Firecrawl scrape fallback.
 
 ### Activity Tracking
 
@@ -348,6 +357,27 @@ The app will be available at `http://localhost:4040`.
 | `WITHMD_PRIVATE_FONTS_STYLESHEET_URL` | Optional full URL for private font CSS (recommended for Vercel/GitHub-only deploys) |
 | `WITHMD_INLINE_REALTIME_MAX_BYTES` | Max document size for real-time sync (default: 900KB) |
 | `WITHMD_ANON_REALTIME_MAX_BYTES` | Max anon share size for real-time (default: 1MB) |
+| `WEB2MD_CACHE_TTL_DAYS` | Website snapshot staleness window in days (default: `30`) |
+| `WITHMD_WEB2MD_RATE_LIMIT_NORMAL` | Anonymous `/api/web-md/resolve` normal requests per hour (default: `60`) |
+| `WITHMD_WEB2MD_RATE_LIMIT_REVALIDATE` | Anonymous revalidate requests per hour (default: `18`) |
+| `WITHMD_WEB2MD_FORCE_ENGINE` | Optional debug override (`local_heuristic`, `openrouter_gpt_oss_20b`, `jina_reader`, `firecrawl_scrape`) |
+| `WITHMD_WEB2MD_DISABLE_LOCAL` | Set to `1` to disable local heuristic stage |
+| `WITHMD_WEB2MD_DISABLE_OPENROUTER` | Set to `1` to disable OpenRouter cleanup stage |
+| `WITHMD_WEB2MD_DISABLE_JINA` | Set to `1` to disable Jina fallback stage |
+| `WITHMD_WEB2MD_DISABLE_FIRECRAWL` | Set to `1` to disable Firecrawl fallback stage |
+| `WITHMD_WEB2MD_USER_AGENT` | Optional custom user-agent for heuristic fetches |
+| `WITHMD_WEB2MD_ACCEPT_LANGUAGE` | Optional Accept-Language header for heuristic fetches |
+| `WITHMD_WEB2MD_HF_TOKEN` | Optional Hugging Face token for protected/rate-limited HF pages |
+| `WITHMD_WEB2MD_JINA_API_KEY` | Optional Jina key for higher limits |
+| `WITHMD_WEB2MD_JINA_TIMEOUT_MS` | Optional Jina fetch timeout in milliseconds (default: `35000`) |
+| `WITHMD_WEB2MD_FIRECRAWL_API_KEY` | Optional Firecrawl key for scrape fallback |
+| `WITHMD_WEB2MD_FIRECRAWL_API_BASE` | Optional Firecrawl API base URL (default: `https://api.firecrawl.dev/v2`) |
+| `WITHMD_WEB2MD_FIRECRAWL_TIMEOUT_MS` | Optional Firecrawl request timeout in milliseconds (default: `45000`) |
+| `WITHMD_WEB2MD_FIRECRAWL_WAIT_FOR_MS` | Optional Firecrawl wait-before-scrape delay in milliseconds (default: `0`) |
+| `WITHMD_WEB2MD_FIRECRAWL_MAX_AGE_MS` | Optional Firecrawl cache max-age in milliseconds (default: `0`) |
+| `WITHMD_WEB2MD_FIRECRAWL_PROXY` | Optional Firecrawl proxy mode (`basic`, `enhanced`, `auto`; default `auto`) |
+| `OPENROUTER_API_KEY` | Optional server-side OpenRouter key for LLM cleanup stage |
+| `WITHMD_WEB2MD_LLM_MODEL` | Optional OpenRouter model id (default: `openai/gpt-oss-20b`) |
 
 ### Hocuspocus (`hocuspocus-server/.env`)
 
@@ -362,6 +392,13 @@ The app will be available at `http://localhost:4040`.
 | Variable | Description |
 |----------|-------------|
 | `HOCUSPOCUS_CONVEX_SECRET` | Must match the Hocuspocus server secret |
+
+`WITHMD_WEB2MD_FORCE_ENGINE` is optional and should usually be left unset. The default fallback order is:
+
+1. `local_heuristic`
+2. `openrouter_gpt_oss_20b`
+3. `jina_reader`
+4. `firecrawl_scrape`
 
 ## Optional Product Analytics (PostHog)
 
@@ -403,7 +440,7 @@ Set `WITHMD_PRIVATE_FONTS_STYLESHEET_URL=https://<your-private-cdn>/private-font
 ```
 with-md/
 ├── convex/                              # Serverless backend
-│   ├── schema.ts                        # Database schema (12 tables)
+│   ├── schema.ts                        # Database schema (14 tables)
 │   ├── mdFiles.ts                       # File operations, sync, import
 │   ├── collab.ts                        # Real-time auth & Yjs persistence
 │   ├── http.ts                          # HTTP routes for Hocuspocus
@@ -430,15 +467,17 @@ with-md/
 │       ├── app/
 │       │   ├── page.tsx                 # Landing page
 │       │   ├── workspace/               # Main app (authed)
-│       │   └── api/                     # 16 API routes
+│       │   └── api/                     # API routes
 │       │       ├── auth/                #   OAuth flow
 │       │       ├── github/              #   Repo/branch/sync/push
 │       │       ├── anon-share/          #   Anonymous sharing
-│       │       └── repo-share/          #   Repo file sharing
+│       │       ├── repo-share/          #   Repo file sharing
+│       │       └── web-md/              #   Website-to-markdown resolve API
 │       ├── components/with-md/          # UI components
 │       │   ├── with-md-shell.tsx        #   App shell
 │       │   ├── collab-editor.tsx        #   TipTap editor
 │       │   ├── source-editor.tsx        #   Raw markdown editor
+│       │   ├── web-page-shell.tsx       #   URL snapshot viewer shell
 │       │   ├── file-tree.tsx            #   File browser
 │       │   ├── comments-sidebar.tsx     #   Comments
 │       │   ├── diff-viewer.tsx          #   Diff viewer
@@ -452,6 +491,7 @@ with-md/
 │       │   ├── use-comment-anchors.ts   #   Anchor resolution
 │       │   └── use-doc-mode.ts          #   Mode switching
 │       ├── lib/with-md/                 # Utilities & API client
+│       │   └── web2md/                  #   URL canonicalize/fetch/convert pipeline
 │       └── styles/                      # CSS
 │
 ├── plans/                               # Feature planning docs
