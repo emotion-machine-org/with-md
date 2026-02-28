@@ -17,6 +17,8 @@ export const WITH_MD_CONVEX_FUNCTIONS = {
     anonSharesGetPublic: 'anonShares:getPublic',
     anonSharesCanEdit: 'anonShares:canEdit',
     repoSharesResolve: 'repoShares:resolve',
+    webSnapshotsGetByUrlHash: 'webSnapshots:getByUrlHash',
+    webSnapshotsListVersions: 'webSnapshots:listVersions',
   },
   mutations: {
     commentsCreate: 'comments:create',
@@ -51,5 +53,6 @@ export const WITH_MD_CONVEX_FUNCTIONS = {
     anonSharesUpdateViaApi: 'anonShares:updateViaApi',
     anonSharesConsumeCreateQuota: 'anonShares:consumeCreateQuota',
     repoSharesCreate: 'repoShares:create',
+    webSnapshotsUpsertSnapshot: 'webSnapshots:upsertSnapshot',
   },
 } as const;
