@@ -6,70 +6,27 @@
  *   Returns JSON with content and metadata for the share.
  *
  * PUT /api/public/share/:shareId
- *   Body: { editSecret: string; content: string; title?: string }
+ *   Body: { editSecret: string; content: string; title?: string; ifMatch?: string }
  *   Updates content (requires the editSecret returned at creation time).
  *   Returns updated metadata.
+ *   Optionally enforces optimistic concurrency via ifMatch or If-Match header.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex, queryConvex } from '@/lib/with-md/convex-client';
 import { generateClientId, checkRateLimit, MAX_REQUESTS_PER_WINDOW } from '@/lib/with-md/rate-limit';
+import {
+  MAX_PUBLIC_SHARE_BYTES,
+  markdownByteLength,
+  normalizeMarkdownInput,
+  readExpectedVersion,
+  toSafeMarkdownFilename,
+  tryHocuspocusEdit,
+} from '@/lib/with-md/public-share-api';
 
 interface Params {
   params: Promise<{ shareId: string }>;
-}
-
-const MAX_UPLOAD_BYTES = 1024 * 1024; // 1MB
-
-// ─── Hocuspocus real-time sync ────────────────────────────────────────────────
-
-function getHocuspocusHttpUrl(): string | null {
-  const explicit = process.env.HOCUSPOCUS_HTTP_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
-
-  const wsUrl = process.env.NEXT_PUBLIC_HOCUSPOCUS_URL;
-  if (!wsUrl) return null;
-
-  return wsUrl
-    .replace(/^wss:\/\//, 'https://')
-    .replace(/^ws:\/\//, 'http://')
-    .replace(/\/$/, '');
-}
-
-async function tryHocuspocusEdit(
-  documentName: string,
-  editSecret: string,
-  content: string,
-): Promise<boolean> {
-  const baseUrl = getHocuspocusHttpUrl();
-  if (!baseUrl) return false;
-
-  try {
-    const res = await fetch(`${baseUrl}/api/agent/edit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ documentName, editSecret, content }),
-      signal: AbortSignal.timeout(5000),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-function toSafeFilename(title: string): string {
-  const normalized = title
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  const base = normalized || 'shared-markdown';
-  return base.endsWith('.md') || base.endsWith('.markdown') ? base : `${base}.md`;
-}
-
-function markdownByteLength(value: string): number {
-  return new TextEncoder().encode(value).byteLength;
 }
 
 // ─── GET ─────────────────────────────────────────────────────────────────────
@@ -131,7 +88,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       ok: true,
       shareId: share.shortId,
       title: share.title,
-      filename: toSafeFilename(share.title),
+      filename: toSafeMarkdownFilename(share.title),
       content: share.content,
       version: share.contentHash,
       sizeBytes: share.sizeBytes,
@@ -207,15 +164,16 @@ export async function PUT(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Missing or invalid "content" field.' }, { status: 400 });
   }
 
-  const normalizedContent = content.replace(/\r\n/g, '\n');
+  const normalizedContent = normalizeMarkdownInput(content);
   const sizeBytes = markdownByteLength(normalizedContent);
+  const expectedContentHash = readExpectedVersion(parsed, request);
 
   if (sizeBytes <= 0) {
     return NextResponse.json({ error: 'Content cannot be empty.' }, { status: 400 });
   }
-  if (sizeBytes > MAX_UPLOAD_BYTES) {
+  if (sizeBytes > MAX_PUBLIC_SHARE_BYTES) {
     return NextResponse.json(
-      { error: `Content too large. Maximum size is ${Math.floor(MAX_UPLOAD_BYTES / 1024)}KB.` },
+      { error: `Content too large. Maximum size is ${Math.floor(MAX_PUBLIC_SHARE_BYTES / 1024)}KB.` },
       { status: 413 },
     );
   }
@@ -233,6 +191,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     contentHash?: string;
     sizeBytes?: number;
     updatedAt?: number;
+    currentContentHash?: string;
   };
 
   type UpdateResult = typeof result;
@@ -245,6 +204,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         shortId,
         editSecret: editSecret.trim(),
         content: normalizedContent,
+        expectedContentHash,
         ...(title !== undefined ? { title } : {}),
       }),
       tryHocuspocusEdit(`share:${shortId}`, editSecret.trim(), normalizedContent),
@@ -263,8 +223,18 @@ export async function PUT(request: NextRequest, { params }: Params) {
     }
     if (result.reason === 'too_large') {
       return NextResponse.json(
-        { error: `Content too large. Maximum size is ${Math.floor(MAX_UPLOAD_BYTES / 1024)}KB.` },
+        { error: `Content too large. Maximum size is ${Math.floor(MAX_PUBLIC_SHARE_BYTES / 1024)}KB.` },
         { status: 413 },
+      );
+    }
+    if (result.reason === 'version_mismatch') {
+      return NextResponse.json(
+        {
+          error: 'Version mismatch.',
+          expectedVersion: expectedContentHash,
+          currentVersion: result.currentContentHash,
+        },
+        { status: 409 },
       );
     }
     return NextResponse.json({ error: 'Update failed.' }, { status: 500 });
@@ -278,7 +248,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
       ok: true,
       shareId: result.shortId,
       title: result.title,
-      filename: toSafeFilename(result.title ?? ''),
+      filename: toSafeMarkdownFilename(result.title ?? ''),
       version: result.contentHash,
       sizeBytes: result.sizeBytes,
       updatedAt: result.updatedAt,

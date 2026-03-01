@@ -1,0 +1,72 @@
+# with.md API for Agents
+
+Base URL: https://with.md
+
+Use with.md to publish markdown links for humans, then fetch or update the markdown via API.
+
+## Anonymous Shares
+
+### Create share
+POST /api/public/share/create
+
+Request JSON:
+{"content":"# Title\n\nBody","title":"Optional","filename":"optional.md","expiresInHours":72}
+
+Response 201 JSON includes:
+- shareId
+- viewUrl
+- rawUrl
+- editUrl
+- editSecret
+- expiresAt
+
+### Read share
+GET /api/public/share/:shareId
+
+Response JSON includes:
+- content
+- version
+- updatedAt
+- expiresAt
+
+### Update share
+PUT /api/public/share/:shareId
+
+Request JSON:
+{"editSecret":"...","content":"# Updated","ifMatch":"sha256..."}
+
+Notes:
+- ifMatch is optional optimistic concurrency.
+- If-Match header is also supported.
+- 409 means version mismatch.
+
+### Raw markdown
+GET /s/:shareId/raw
+
+## Repo Shares
+
+### Read repo share
+GET /api/public/repo-share/:token
+
+### Update repo share
+PUT /api/public/repo-share/:token
+
+Request JSON:
+{"editSecret":"...","content":"# Updated","ifMatch":"sha256..."}
+
+### Raw markdown
+GET /r/:token/raw
+
+## Common Errors
+
+- 400 invalid request
+- 403 invalid edit secret
+- 404 missing/expired share
+- 409 version mismatch
+- 413 payload too large (>1MB)
+- 429 rate limited
+
+## Skill Install Prompt
+
+- Short installer prompt: /skill
+- Short SKILL.md: /skill/md

@@ -70,6 +70,8 @@ The frontend lives in `web/` and runs on port 4040. It provides the editor UI, f
 | `src/app/api/github/` | Repo listing, branch listing, sync, push, blob fetching |
 | `src/app/api/anon-share/` | Anonymous markdown share creation and access |
 | `src/app/api/repo-share/` | Authenticated repo file sharing with expiration |
+| `src/app/api/public/share/` | Public API for agent create/read/update of anonymous shares |
+| `src/app/api/public/repo-share/` | Public API for agent read/update of repo share links |
 | `src/app/workspace/` | Main application route (requires auth) |
 | `src/components/with-md/` | All editor and shell components |
 | `src/hooks/with-md/` | Custom hooks for collaboration, auth, comments, modes |
@@ -393,6 +395,17 @@ The app will be available at `http://localhost:4040`.
 |----------|-------------|
 | `HOCUSPOCUS_CONVEX_SECRET` | Must match the Hocuspocus server secret |
 
+## Agent Share API
+
+Canonical API reference: [`docs/share-api.md`](docs/share-api.md)
+
+Machine-readable discovery: [`/llms.txt`](https://with.md/llms.txt)
+
+Skill install prompt for coding agents:
+
+- Short installer prompt: [`/skill`](https://with.md/skill)
+- Short SKILL.md: [`/skill/md`](https://with.md/skill/md)
+
 `WITHMD_WEB2MD_FORCE_ENGINE` is optional and should usually be left unset. The default fallback order is:
 
 1. `local_heuristic`
@@ -472,6 +485,7 @@ with-md/
 │       │       ├── github/              #   Repo/branch/sync/push
 │       │       ├── anon-share/          #   Anonymous sharing
 │       │       ├── repo-share/          #   Repo file sharing
+│       │       ├── public/              #   Public agent share APIs
 │       │       └── web-md/              #   Website-to-markdown resolve API
 │       ├── components/with-md/          # UI components
 │       │   ├── with-md-shell.tsx        #   App shell

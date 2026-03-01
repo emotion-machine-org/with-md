@@ -11,11 +11,13 @@
  *   expiresInHours?: number; // Optional, default 168 (7 days), max 720 (30 days)
  * }
  *
- * Response: {
+ * Response (201): {
  *   ok: true;
  *   shareId: string;
  *   viewUrl: string;      // Public read-only URL
+ *   rawUrl: string;       // Plain-text markdown URL
  *   editUrl: string;      // URL with edit secret for the creator
+ *   editSecret: string;   // Secret token for future PUT updates
  *   expiresAt: number;    // Unix timestamp in milliseconds
  * }
  */
@@ -29,8 +31,11 @@ import {
   MAX_CREATES_PER_WINDOW,
   MAX_REQUESTS_PER_WINDOW,
 } from '@/lib/with-md/rate-limit';
-
-const MAX_UPLOAD_BYTES = 1024 * 1024; // 1MB
+import {
+  MAX_PUBLIC_SHARE_BYTES,
+  markdownByteLength,
+  normalizeMarkdownInput,
+} from '@/lib/with-md/public-share-api';
 const DEFAULT_EXPIRY_HOURS = 7 * 24; // 7 days
 const MAX_EXPIRY_HOURS = 30 * 24; // 30 days
 
@@ -45,10 +50,6 @@ function normalizeTitleFromFileName(fileName: string): string {
   const normalized = sanitizeFileName(fileName);
   const withoutExt = normalized.replace(/\.markdown$/i, '').replace(/\.md$/i, '');
   return withoutExt || 'Shared Document';
-}
-
-function markdownByteLength(value: string): number {
-  return new TextEncoder().encode(value).byteLength;
 }
 
 function generateShortId(): string {
@@ -100,15 +101,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing or invalid "content" field.' }, { status: 400 });
   }
 
-  const normalizedContent = content.replace(/\r\n/g, '\n');
+  const normalizedContent = normalizeMarkdownInput(content);
   const sizeBytes = markdownByteLength(normalizedContent);
 
   if (sizeBytes <= 0) {
     return NextResponse.json({ error: 'Content cannot be empty.' }, { status: 400 });
   }
-  if (sizeBytes > MAX_UPLOAD_BYTES) {
+  if (sizeBytes > MAX_PUBLIC_SHARE_BYTES) {
     return NextResponse.json({
-      error: `Content too large. Maximum size is ${Math.floor(MAX_UPLOAD_BYTES / 1024)}KB.`,
+      error: `Content too large. Maximum size is ${Math.floor(MAX_PUBLIC_SHARE_BYTES / 1024)}KB.`,
     }, { status: 413 });
   }
 
@@ -164,15 +165,19 @@ export async function POST(request: NextRequest) {
 
   const origin = request.nextUrl.origin;
   const viewUrl = `${origin}/s/${encodeURIComponent(shareId)}`;
+  const rawUrl = `${viewUrl}/raw`;
   const editUrl = `${viewUrl}?edit=${encodeURIComponent(editSecret)}`;
 
   return NextResponse.json({
     ok: true,
     shareId,
     viewUrl,
+    rawUrl,
     editUrl,
+    editSecret,
     expiresAt,
   }, {
+    status: 201,
     headers: {
       'X-RateLimit-Limit': String(MAX_CREATES_PER_WINDOW),
       'X-RateLimit-Remaining': String(rateLimit.remaining),

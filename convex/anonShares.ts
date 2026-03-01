@@ -390,6 +390,7 @@ export const updateViaApi = internalMutation({
     editSecret: v.string(),
     content: v.string(),
     title: v.optional(v.string()),
+    expectedContentHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const share = await getActiveShareByShortId(ctx, args.shortId);
@@ -397,6 +398,17 @@ export const updateViaApi = internalMutation({
 
     const allowed = await canEditShare(share, args.editSecret);
     if (!allowed) return { ok: false as const, reason: 'forbidden' as const };
+
+    if (typeof args.expectedContentHash === 'string' && args.expectedContentHash.trim()) {
+      const expectedContentHash = args.expectedContentHash.trim();
+      if (expectedContentHash !== share.contentHash) {
+        return {
+          ok: false as const,
+          reason: 'version_mismatch' as const,
+          currentContentHash: share.contentHash,
+        };
+      }
+    }
 
     const normalized = args.content.replace(/\r\n/g, '\n');
     const sizeBytes = markdownByteLength(normalized);

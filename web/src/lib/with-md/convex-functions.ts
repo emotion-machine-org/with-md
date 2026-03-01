@@ -53,6 +53,7 @@ export const WITH_MD_CONVEX_FUNCTIONS = {
     anonSharesUpdateViaApi: 'anonShares:updateViaApi',
     anonSharesConsumeCreateQuota: 'anonShares:consumeCreateQuota',
     repoSharesCreate: 'repoShares:create',
+    repoSharesUpdateViaApi: 'repoShares:updateViaApi',
     webSnapshotsUpsertSnapshot: 'webSnapshots:upsertSnapshot',
   },
 } as const;
