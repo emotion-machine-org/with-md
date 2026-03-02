@@ -3079,6 +3079,13 @@
   z-index: 5;
 }
 
+.withmd-home-icon {
+  width: 17px;
+  height: 17px;
+  opacity: 0.88;
+  flex-shrink: 0;
+}
+
 .withmd-dock {
   display: flex;
   align-items: center;

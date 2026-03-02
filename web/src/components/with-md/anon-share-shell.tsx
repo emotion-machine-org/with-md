@@ -311,6 +311,11 @@ export default function AnonShareShell({ shareId }: Props) {
         <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill withmd-anon-share-panel">
           <header className="withmd-dock-wrap withmd-anon-share-toolbar">
             <div className="withmd-dock">
+              <a href="/" className="withmd-dock-btn" aria-label="with.md home">
+                <img src="/favicon.ico" alt="with.md" className="withmd-home-icon" />
+                <span className="withmd-dock-tooltip">with.md</span>
+              </a>
+              <span className="withmd-dock-gap" />
               {showEditor ? (
                 <button
                   type="button"
