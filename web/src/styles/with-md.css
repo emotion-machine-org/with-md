@@ -846,10 +846,12 @@
 
 .withmd-table-block.ProseMirror-selectednode {
   outline: 1px solid var(--withmd-primary-border);
+  outline-offset: -1px;
 }
 
 .withmd-table-block.is-editing {
   outline: 1px solid var(--withmd-primary-border);
+  outline-offset: -1px;
 }
 
 .withmd-table-block-editor {
