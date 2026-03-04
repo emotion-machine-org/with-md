@@ -14,7 +14,6 @@ interface Props {
   userMode: UserMode;
   canUseRichEdit: boolean;
   syntaxReasons: string[];
-  statusMessage: string | null;
   realtimeSafeModeMessage?: string | null;
   user?: AuthUser;
   peerCount?: number;
@@ -92,7 +91,6 @@ export default function DocumentToolbar({
   userMode,
   canUseRichEdit,
   syntaxReasons,
-  statusMessage,
   realtimeSafeModeMessage,
   user,
   peerCount,
@@ -414,11 +412,6 @@ export default function DocumentToolbar({
         </p>
       )}
 
-      {statusMessage && (
-        <div className="withmd-row withmd-gap-2 withmd-mt-2 withmd-dock-meta">
-          <span className="withmd-muted-xs withmd-dock-status">{statusMessage}</span>
-        </div>
-      )}
     </header>
   );
 }

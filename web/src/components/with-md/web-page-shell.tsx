@@ -6,6 +6,8 @@ import type { CSSProperties } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import NoticeStack from '@/components/with-md/notice-stack';
+import type { Notice } from '@/components/with-md/notice-stack';
 import { useScrollbarWidth } from '@/hooks/with-md/use-scrollbar-width';
 
 interface Props {
@@ -268,45 +270,30 @@ export default function WebPageShell({ targetUrl, initialMode, initialTrigger }:
             <span className="withmd-filepath-dir">{snapshot.normalizedUrl}</span>
           </div>
 
-          <aside className="withmd-web2md-notice-stack" aria-live="polite">
-            {!metaNoticeClosed ? (
-              <section className="withmd-web2md-notice">
-                <span>
-                  {fromCache ? 'cached' : 'fresh'}
-                  {' · '}
-                  v{snapshot.version}
-                  {' · '}
-                  {snapshot.sourceEngine}
-                  {' · '}
-                  {formatAge(snapshot.fetchedAt)}
-                  {snapshot.isStale ? ' · stale' : ''}
-                  {snapshot.httpStatus ? ` · HTTP ${snapshot.httpStatus}` : ''}
-                </span>
-                <button
-                  type="button"
-                  className="withmd-web2md-notice-close"
-                  aria-label="Dismiss metadata notice"
-                  onClick={() => setMetaNoticeClosed(true)}
-                >
-                  ×
-                </button>
-              </section>
-            ) : null}
-
-            {statusMessage && !statusNoticeClosed ? (
-              <section className="withmd-web2md-notice withmd-web2md-notice-accent">
-                <span>{statusMessage}</span>
-                <button
-                  type="button"
-                  className="withmd-web2md-notice-close"
-                  aria-label="Dismiss status notice"
-                  onClick={() => setStatusNoticeClosed(true)}
-                >
-                  ×
-                </button>
-              </section>
-            ) : null}
-          </aside>
+          <NoticeStack
+            notices={(() => {
+              const n: Notice[] = [];
+              if (!metaNoticeClosed) {
+                const meta = [
+                  fromCache ? 'cached' : 'fresh',
+                  `v${snapshot.version}`,
+                  snapshot.sourceEngine,
+                  formatAge(snapshot.fetchedAt),
+                  snapshot.isStale ? 'stale' : '',
+                  snapshot.httpStatus ? `HTTP ${snapshot.httpStatus}` : '',
+                ].filter(Boolean).join(' · ');
+                n.push({ id: 'meta', message: meta });
+              }
+              if (statusMessage && !statusNoticeClosed) {
+                n.push({ id: 'status', message: statusMessage, accent: true });
+              }
+              return n;
+            })()}
+            onDismiss={(id) => {
+              if (id === 'meta') setMetaNoticeClosed(true);
+              if (id === 'status') setStatusNoticeClosed(true);
+            }}
+          />
 
           <div className="withmd-doc-stage withmd-fill">
             {isSource ? (

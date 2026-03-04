@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import CollabEditor from '@/components/with-md/collab-editor';
+import NoticeStack from '@/components/with-md/notice-stack';
 import { useScrollbarWidth } from '@/hooks/with-md/use-scrollbar-width';
 import { cursorColorForUser } from '@/lib/with-md/cursor-colors';
 
@@ -84,6 +85,7 @@ export default function AnonShareShell({ shareId }: Props) {
   const [canEdit, setCanEdit] = useState(false);
   const [content, setContent] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusNoticeClosed, setStatusNoticeClosed] = useState(false);
   const [anonName, setAnonName] = useState('anon-user');
   const [userMode, setUserMode] = useState<'document' | 'source'>('document');
   const [formatBarOpen, setFormatBarOpen] = useState(false);
@@ -95,6 +97,15 @@ export default function AnonShareShell({ shareId }: Props) {
   useEffect(() => {
     setAnonName(readAnonName());
   }, []);
+
+  useEffect(() => {
+    if (!statusMessage) return;
+    setStatusNoticeClosed(false);
+    const timer = window.setTimeout(() => {
+      setStatusMessage((cur) => (cur === statusMessage ? null : cur));
+    }, 4500);
+    return () => window.clearTimeout(timer);
+  }, [statusMessage]);
 
   useEffect(() => {
     let active = true;
@@ -395,12 +406,14 @@ export default function AnonShareShell({ shareId }: Props) {
                 <span className="withmd-dock-tooltip">Theme</span>
               </button>
             </div>
-            {statusMessage ? (
-              <div className="withmd-row withmd-gap-2 withmd-mt-2 withmd-dock-meta withmd-anon-share-status-wrap">
-                <span className="withmd-muted-xs withmd-dock-status withmd-anon-share-status">{statusMessage}</span>
-              </div>
-            ) : null}
           </header>
+
+          {statusMessage && !statusNoticeClosed ? (
+            <NoticeStack
+              notices={[{ id: 'status', message: statusMessage, accent: true }]}
+              onDismiss={() => setStatusNoticeClosed(true)}
+            />
+          ) : null}
 
           <div className="withmd-doc-stage withmd-fill">
             {showEditor && !showSource ? (

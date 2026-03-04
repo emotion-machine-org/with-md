@@ -7,6 +7,7 @@ import { MultiFileDiff } from '@pierre/diffs/react';
 import * as Y from 'yjs';
 
 import FormatToolbar from '@/components/with-md/format-toolbar';
+import NoticeStack from '@/components/with-md/notice-stack';
 import { usePeerCount } from '@/components/with-md/presence-strip';
 import { buildEditorExtensions } from '@/components/with-md/tiptap/editor-extensions';
 import { useCollabDoc } from '@/hooks/with-md/use-collab-doc';
@@ -337,6 +338,7 @@ export default function EmbedPage() {
   const [repoStatus, setRepoStatus] = useState<'loading' | 'connected' | 'not_found' | 'unauthenticated' | 'error'>('loading');
   const [user, setUser] = useState<UserInfo | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusNoticeClosed, setStatusNoticeClosed] = useState(false);
   const [content, setContent] = useState('');
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
@@ -348,6 +350,15 @@ export default function EmbedPage() {
       ? 'pierre-light'
       : 'pierre-dark',
   );
+
+  useEffect(() => {
+    if (!statusMessage) return;
+    setStatusNoticeClosed(false);
+    const timer = window.setTimeout(() => {
+      setStatusMessage((cur) => (cur === statusMessage ? null : cur));
+    }, 4500);
+    return () => window.clearTimeout(timer);
+  }, [statusMessage]);
 
   // --- Collab state ---
   const [mdFileId, setMdFileId] = useState<string | null>(null);
@@ -899,17 +910,21 @@ export default function EmbedPage() {
                 </>
               )}
             </div>
-            {statusMessage && (
-              <div className="withmd-row withmd-gap-2 withmd-mt-2 withmd-dock-meta withmd-anon-share-status-wrap">
-                <span className="withmd-muted-xs withmd-dock-status withmd-anon-share-status">{statusMessage}</span>
-              </div>
-            )}
-            {statusBarText && !statusMessage && (
-              <div className="withmd-row withmd-gap-2 withmd-mt-2 withmd-dock-meta withmd-anon-share-status-wrap">
-                <span className="withmd-muted-xs withmd-dock-status withmd-anon-share-status">{statusBarText}</span>
-              </div>
-            )}
           </header>
+
+          <NoticeStack
+            notices={[
+              ...(statusMessage && !statusNoticeClosed
+                ? [{ id: 'status', message: statusMessage, accent: true }]
+                : []),
+              ...(statusBarText && !statusMessage
+                ? [{ id: 'statusBar', message: statusBarText, closable: false }]
+                : []),
+            ]}
+            onDismiss={(id) => {
+              if (id === 'status') setStatusNoticeClosed(true);
+            }}
+          />
 
           <div className="withmd-doc-stage withmd-fill">
             {diffOpen && diffOriginalContent !== null ? (

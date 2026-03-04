@@ -8,6 +8,7 @@ import DiffViewer from '@/components/with-md/diff-viewer';
 import DocumentSurface from '@/components/with-md/document-surface';
 import DocumentToolbar from '@/components/with-md/document-toolbar';
 import FileTree from '@/components/with-md/file-tree';
+import NoticeStack from '@/components/with-md/notice-stack';
 import ImportDropOverlay from '@/components/with-md/import-drop-overlay';
 import ImportReviewSheet from '@/components/with-md/import-review-sheet';
 import PushCommitSheet from '@/components/with-md/push-commit-sheet';
@@ -185,6 +186,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [comments, setComments] = useState<CommentRecord[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusNoticeClosed, setStatusNoticeClosed] = useState(false);
   const [pendingSelection, setPendingSelection] = useState<CommentSelectionDraft | null>(null);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [focusRequestId, setFocusRequestId] = useState(0);
@@ -232,6 +234,16 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     if (!activeRepoId) return;
     localStorage.setItem(REPO_STORAGE_KEY, activeRepoId);
   }, [activeRepoId]);
+
+  // Auto-dismiss status notices after 4.5s
+  useEffect(() => {
+    if (!statusMessage) return;
+    setStatusNoticeClosed(false);
+    const timer = window.setTimeout(() => {
+      setStatusMessage((cur) => (cur === statusMessage ? null : cur));
+    }, 4500);
+    return () => window.clearTimeout(timer);
+  }, [statusMessage]);
 
   // Fetch a signed collab token when the user is authenticated
   useEffect(() => {
@@ -1577,7 +1589,6 @@ export default function WithMdShell({ repoId, filePath }: Props) {
               userMode={userMode}
               canUseRichEdit={canUseRichEdit}
               syntaxReasons={syntaxReasons}
-              statusMessage={statusMessage}
               realtimeSafeModeMessage={realtimeSafeModeMessage}
               user={user ?? undefined}
               peerCount={peerCount}
@@ -1609,6 +1620,13 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                 window.location.href = '/';
               } : undefined}
             />
+
+            {statusMessage && !statusNoticeClosed ? (
+              <NoticeStack
+                notices={[{ id: 'status', message: statusMessage, accent: true }]}
+                onDismiss={() => setStatusNoticeClosed(true)}
+              />
+            ) : null}
 
             <div className="withmd-doc-stage">
               {diffOpen ? (
