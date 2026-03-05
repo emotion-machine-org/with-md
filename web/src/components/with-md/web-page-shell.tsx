@@ -162,6 +162,15 @@ export default function WebPageShell({ targetUrl, initialMode, initialTrigger }:
     }
   }, [markdown]);
 
+  const onCopyShareLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setStatusMessage('Share link copied.');
+    } catch {
+      setStatusMessage('Could not copy share link.');
+    }
+  }, []);
+
   const onDownload = useCallback(() => {
     if (!markdown) return;
     const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
@@ -253,6 +262,10 @@ export default function WebPageShell({ targetUrl, initialMode, initialTrigger }:
               >
                 <RefreshIcon />
                 <span className="withmd-dock-tooltip">Revalidate</span>
+              </button>
+              <button type="button" className="withmd-dock-btn" aria-label="Copy share link" onClick={() => void onCopyShareLink()}>
+                <ShareIcon />
+                <span className="withmd-dock-tooltip">Share</span>
               </button>
               <a className="withmd-dock-btn" href={snapshot.normalizedUrl} target="_blank" rel="noreferrer" aria-label="Open original URL">
                 <ExternalIcon />
@@ -373,7 +386,15 @@ function ExternalIcon() {
 function RefreshIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 4a8 8 0 0 1 7.75 6h-2.1A6 6 0 1 0 18 13h-3l4 4 4-4h-3a8 8 0 1 1-8-9Z" />
+      <path d="M5.463 4.433A9.961 9.961 0 0 1 12 2c5.523 0 10 4.477 10 10 0 2.136-.67 4.116-1.81 5.74L17 12h3a8 8 0 0 0-14.32-4.95l-.217.383ZM18.537 19.567A9.961 9.961 0 0 1 12 22C6.477 22 2 17.523 2 12c0-2.136.67-4.116 1.81-5.74L7 12H4a8 8 0 0 0 14.32 4.95l.217-.383Z" />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18 16.08a2.92 2.92 0 0 0-1.96.77l-6.12-3.56a3.18 3.18 0 0 0 0-2.58l6.12-3.56A3 3 0 1 0 15 5a2.89 2.89 0 0 0 .04.49L8.9 9.05a3 3 0 1 0 0 5.9l6.14 3.56a2.89 2.89 0 0 0-.04.49 3 3 0 1 0 3-2.92Z" />
     </svg>
   );
 }
