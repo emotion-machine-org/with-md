@@ -468,7 +468,7 @@ export default function CollabEditor({
 }: Props) {
   const enableRealtime = realtimeEnabled;
 
-  const { ydoc, provider, connected, reason } = useCollabDoc({
+  const { ydoc, provider, connected, synced, reason } = useCollabDoc({
     mdFileId,
     contentHash,
     token: authToken,
@@ -661,6 +661,31 @@ export default function CollabEditor({
     (editor.commands as unknown as { setContent: (value: string, options?: { contentType?: string }) => boolean })
       .setContent(content, { contentType: 'markdown' });
   }, [content, editor, realtimeActive]);
+
+  // Seed the Y.Doc from canonical markdown ONLY after Hocuspocus has finished
+  // syncing and reported no stored state (i.e., the doc has never been edited
+  // before). Safe because we're the first real writer — no other clientID
+  // contributions exist to merge against.
+  const didSeedRef = useRef(false);
+  useEffect(() => {
+    if (didSeedRef.current) return;
+    if (!editor) return;
+    if (!realtimeActive) return;
+    if (!synced) return;
+    if (!content || content.trim().length === 0) return;
+
+    const pmDoc = editor.state?.doc;
+    if (!pmDoc) return;
+    const pmEmpty = pmDoc.content.size <= 2 && pmDoc.textContent.trim().length === 0;
+    if (!pmEmpty) {
+      didSeedRef.current = true;
+      return;
+    }
+
+    didSeedRef.current = true;
+    (editor.commands as unknown as { setContent: (value: string, options?: { contentType?: string }) => boolean })
+      .setContent(content, { contentType: 'markdown' });
+  }, [editor, realtimeActive, synced, content]);
 
   useEffect(() => {
     if (!editor) return;

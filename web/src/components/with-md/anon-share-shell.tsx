@@ -3,9 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+const ClaudeTerminal = dynamic(() => import('@/components/with-md/claude-terminal'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ padding: '12px', color: '#8b949e', fontFamily: 'monospace', fontSize: '12px' }}>
+      Loading terminal...
+    </div>
+  ),
+});
 
 import CollabEditor from '@/components/with-md/collab-editor';
 import NoticeStack from '@/components/with-md/notice-stack';
@@ -90,6 +100,7 @@ export default function AnonShareShell({ shareId }: Props) {
   const [userMode, setUserMode] = useState<'document' | 'source'>('document');
   const [formatBarOpen, setFormatBarOpen] = useState(false);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const shareMenuRef = useRef<HTMLDivElement | null>(null);
   const { ref: sourceScrollRef, scrollbarWidth: sourceScrollbarWidth } = useScrollbarWidth<HTMLPreElement>();
   const { ref: markdownScrollRef, scrollbarWidth: markdownScrollbarWidth } = useScrollbarWidth<HTMLDivElement>();
@@ -318,7 +329,7 @@ export default function AnonShareShell({ shareId }: Props) {
 
   return (
     <main className="withmd-bg withmd-page withmd-stage">
-      <section className="withmd-doc-shell">
+      <section className={`withmd-doc-shell ${terminalOpen ? 'withmd-doc-shell-terminal' : ''}`}>
         <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill withmd-anon-share-panel">
           <header className="withmd-dock-wrap withmd-anon-share-toolbar">
             <div className="withmd-dock">
@@ -405,6 +416,15 @@ export default function AnonShareShell({ shareId }: Props) {
                 <MoonIcon />
                 <span className="withmd-dock-tooltip">Theme</span>
               </button>
+              <button
+                type="button"
+                className={`withmd-dock-btn ${terminalOpen ? 'withmd-dock-btn-active' : ''}`}
+                aria-label="Toggle Claude terminal"
+                onClick={() => setTerminalOpen((open) => !open)}
+              >
+                <TerminalIcon />
+                <span className="withmd-dock-tooltip">Claude Code</span>
+              </button>
             </div>
           </header>
 
@@ -415,7 +435,7 @@ export default function AnonShareShell({ shareId }: Props) {
             />
           ) : null}
 
-          <div className="withmd-doc-stage withmd-fill">
+          <div className={`withmd-doc-stage withmd-fill ${terminalOpen ? 'withmd-terminal-active' : ''}`}>
             {showEditor && !showSource ? (
               <div className="withmd-anon-editor-wrap withmd-fill">
                 <CollabEditor
@@ -470,6 +490,12 @@ export default function AnonShareShell({ shareId }: Props) {
                 </div>
               </div>
             )}
+
+            {terminalOpen ? (
+              <div className="withmd-terminal-panel">
+                <ClaudeTerminal shareId={share.shortId} editSecret={editSecret} />
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -529,6 +555,14 @@ function MoonIcon() {
   return (
     <svg className="withmd-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M10 7a7 7 0 0 0 12 4.9v.1c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2h.1A6.98 6.98 0 0 0 10 7zm-6 5a8 8 0 0 0 15.062 3.762A9 9 0 0 1 8.238 4.938 7.999 7.999 0 0 0 4 12z" />
+    </svg>
+  );
+}
+
+function TerminalIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2 4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4zm2 0v16h16V4H4zm2 2 5 4-5 4 1.5 1.5L13 10 7.5 4.5 6 6zm7 8v2h5v-2h-5z" />
     </svg>
   );
 }

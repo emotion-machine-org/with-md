@@ -3884,3 +3884,104 @@
     display: none;
   }
 }
+
+/* ── Claude Terminal Panel ── */
+
+.withmd-terminal-panel {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--withmd-border);
+  background: #0d1117;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+}
+
+.withmd-claude-terminal-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.withmd-claude-terminal-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #161b22;
+  border-bottom: 1px solid #21262d;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.withmd-claude-terminal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #484f58;
+  transition: background 0.3s;
+}
+
+.withmd-claude-terminal-dot.connected {
+  background: #3fb950;
+}
+
+.withmd-claude-terminal-label {
+  font-family: "JetBrains Mono", "Fira Code", "SF Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: #8b949e;
+  letter-spacing: 0.02em;
+}
+
+.withmd-claude-terminal {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 4px 0;
+  overflow: hidden;
+}
+
+.withmd-claude-terminal .xterm {
+  height: 100%;
+}
+
+/* When terminal is open, doc-stage must not use height:100% (overflows with parent padding) */
+.withmd-anon-share-panel .withmd-doc-stage.withmd-terminal-active {
+  height: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.withmd-terminal-active .withmd-anon-editor-wrap,
+.withmd-terminal-active > .withmd-column {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Widen the shell when terminal is open for more columns */
+.withmd-doc-shell.withmd-doc-shell-terminal {
+  max-width: 980px;
+}
+
+@media (min-width: 1800px) {
+  .withmd-doc-shell.withmd-doc-shell-terminal {
+    max-width: 1100px;
+  }
+}
+
+@media (max-width: 860px) {
+  .withmd-terminal-panel {
+    height: 40%;
+    min-height: 100px;
+    border-radius: 0;
+  }
+
+  .withmd-doc-shell.withmd-doc-shell-terminal {
+    max-width: 100%;
+  }
+}
