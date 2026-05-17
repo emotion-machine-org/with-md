@@ -25,6 +25,7 @@ import { useDocMode } from '@/hooks/with-md/use-doc-mode';
 import { getWithMdApi } from '@/lib/with-md/api';
 import { INLINE_REALTIME_MAX_BYTES, markdownByteLength } from '@/lib/with-md/collab-policy';
 import { hasMeaningfulDiff } from '@/lib/with-md/markdown-diff';
+import { captureWithMdCoreAction, fileExtensionFromName } from '@/lib/with-md/posthog';
 import { detectUnsupportedSyntax } from '@/lib/with-md/syntax';
 import type { ActivityItem, CommentRecord, CommentSelectionDraft, ImportConflictMode, MdFile, RepoSummary, UserMode } from '@/lib/with-md/types';
 
@@ -211,6 +212,7 @@ export default function WithMdShell({ repoId, filePath }: Props) {
   const [collabToken, setCollabToken] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
   const shareLinkSnapshotRef = useRef<ShareLinkSnapshot | null>(null);
+  const trackedEditFileIdsRef = useRef<Set<string>>(new Set());
   const pendingGitHubPaths = useMemo(() => {
     const merged = new Set(queuedGitHubPaths);
     for (const path of localEditedPaths) {
@@ -622,6 +624,19 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     });
   }, []);
 
+  const trackWorkspaceEdit = useCallback((editorMode: UserMode, nextContent: string) => {
+    if (!currentFile) return;
+    if (!hasMeaningfulDiff(nextContent, savedContent)) return;
+    if (trackedEditFileIdsRef.current.has(currentFile.mdFileId)) return;
+    trackedEditFileIdsRef.current.add(currentFile.mdFileId);
+    captureWithMdCoreAction('withmd_document_edited', {
+      surface: 'workspace',
+      editor_mode: editorMode,
+      file_extension: fileExtensionFromName(currentFile.path),
+      repo_connected: true,
+    });
+  }, [currentFile, savedContent]);
+
   const reloadCurrentFileData = useCallback(async () => {
     if (!currentFile) return;
 
@@ -1031,6 +1046,14 @@ export default function WithMdShell({ repoId, filePath }: Props) {
 
       // Show conflict dialog if files were skipped
       const skipped = data.skippedPaths ?? [];
+      captureWithMdCoreAction('withmd_repository_synced', {
+        surface: 'workspace',
+        sync_mode: 'resync',
+        branch_kind: activeBranch ? 'custom' : 'default',
+        files_count: data.filesCount,
+        skipped_paths_count: skipped.length,
+        had_conflicts: skipped.length > 0,
+      });
       if (skipped.length > 0) {
         resyncBodyRef.current = syncBody;
         setResyncConflictRows(skipped.map((p) => ({ path: p, overwrite: true })));
@@ -1150,6 +1173,14 @@ export default function WithMdShell({ repoId, filePath }: Props) {
         setUrlForSelection(activeRepoId, firstFile.path, 'replace');
       }
 
+      captureWithMdCoreAction('withmd_repository_synced', {
+        surface: 'workspace',
+        sync_mode: 'branch_switch',
+        branch_kind: activeBranch ? 'custom' : 'default',
+        files_count: data.filesCount,
+        skipped_paths_count: 0,
+        had_conflicts: false,
+      });
       setStatusMessage(`Switched to ${branchName} (${data.filesCount} files).`);
     } catch (err) {
       setStatusMessage(err instanceof Error ? err.message : 'Branch switch failed.');
@@ -1185,6 +1216,12 @@ export default function WithMdShell({ repoId, filePath }: Props) {
           markdownUrl: toMarkdownRawUrl(data.viewUrl),
         };
         shareLinkSnapshotRef.current = snapshot;
+        captureWithMdCoreAction('withmd_repository_share_created', {
+          surface: 'workspace',
+          share_mode: 'file',
+          file_extension: fileExtensionFromName(currentFile.path),
+          repo_connected: true,
+        });
       }
 
       const url = mode === 'edit'
@@ -1663,12 +1700,14 @@ export default function WithMdShell({ repoId, filePath }: Props) {
                   focusRequestId={focusRequestId}
                   sourceValue={sourceValue}
                   onSourceChange={(next) => {
+                    trackWorkspaceEdit('source', next);
                     setSourceValue(next);
                     if (currentFile) {
                       setLocalPathDirty(currentFile.path, hasMeaningfulDiff(next, savedContent));
                     }
                   }}
                   onEditorContentChange={(next) => {
+                    trackWorkspaceEdit('document', next);
                     if (currentFile) {
                       setLocalPathDirty(currentFile.path, hasMeaningfulDiff(next, savedContent));
                     }
