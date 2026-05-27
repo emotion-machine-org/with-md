@@ -987,7 +987,7 @@
 .withmd-mermaid-block {
   position: relative;
   margin: 24px 0;
-  border-radius: 12px;
+  border-radius: 0;
   background: var(--withmd-code-block-bg, #f8f8f7);
   cursor: default;
 }
@@ -1002,7 +1002,7 @@
   overflow: auto;
   max-height: 600px;
   padding: 24px;
-  border-radius: 12px;
+  border-radius: 0;
 }
 
 .withmd-mermaid-zoom {
@@ -1029,9 +1029,52 @@
   color: var(--withmd-muted);
   background: var(--withmd-code-block-bg, #f8f8f7);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 0;
   pointer-events: none;
   z-index: 1;
+}
+
+.withmd-mermaid-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--withmd-glass-border);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--withmd-panel) 84%, transparent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.withmd-mermaid-zoom-btn {
+  width: 30px;
+  height: 28px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--withmd-text);
+  font-family: var(--withmd-font-sans);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.withmd-mermaid-zoom-btn + .withmd-mermaid-zoom-btn {
+  border-left: 1px solid var(--withmd-glass-border);
+}
+
+.withmd-mermaid-zoom-btn:hover:not(:disabled),
+.withmd-mermaid-zoom-btn:focus-visible:not(:disabled) {
+  background: var(--withmd-glass-bg-hover);
+}
+
+.withmd-mermaid-zoom-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
 }
 
 .withmd-mermaid-error {
