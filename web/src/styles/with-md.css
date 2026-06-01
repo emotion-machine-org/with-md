@@ -1908,22 +1908,10 @@
 .withmd-anon-share-panel .withmd-anon-editor-wrap,
 .withmd-anon-share-panel .withmd-collab-hydration-wrap > .withmd-column,
 .withmd-anon-share-panel .withmd-editor-shell,
-.withmd-anon-share-panel .withmd-prosemirror-wrap,
-.withmd-anon-share-panel .withmd-editor-scroll {
+.withmd-anon-share-panel .withmd-prosemirror-wrap {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-}
-
-.withmd-anon-share-panel .withmd-editor-scroll {
-  margin-right: 0;
-  padding-right: calc(var(--withmd-editor-scrollbar-width) + var(--withmd-editor-scrollbar-extra-offset));
-  scrollbar-gutter: stable;
-}
-
-.withmd-anon-share-panel .withmd-editor-scroll .withmd-prose,
-.withmd-anon-share-panel .withmd-editor-scroll .ProseMirror {
-  width: 100%;
 }
 
 .withmd-anon-share-toolbar {
