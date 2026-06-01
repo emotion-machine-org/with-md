@@ -911,12 +911,17 @@
 .withmd-collab-hydration-wrap {
   position: relative;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .withmd-collab-editor-visible {
   display: flex;
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .withmd-collab-editor-hidden {
@@ -924,6 +929,7 @@
   inset: 0;
   visibility: hidden;
   pointer-events: none;
+  overflow: hidden;
 }
 
 /* ProseMirror-specific overrides (typography inherited from .withmd-prose) */
@@ -1888,10 +1894,36 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .withmd-anon-share-panel .withmd-doc-scroll {
   margin-top: 0;
+}
+
+/* The slow-realtime notice swaps the anonymous share from preview to local edit.
+   Keep both surfaces on the same inline measurement so the document cannot squeeze. */
+.withmd-anon-share-panel .withmd-anon-editor-wrap,
+.withmd-anon-share-panel .withmd-collab-hydration-wrap > .withmd-column,
+.withmd-anon-share-panel .withmd-editor-shell,
+.withmd-anon-share-panel .withmd-prosemirror-wrap,
+.withmd-anon-share-panel .withmd-editor-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.withmd-anon-share-panel .withmd-editor-scroll {
+  margin-right: 0;
+  padding-right: calc(var(--withmd-editor-scrollbar-width) + var(--withmd-editor-scrollbar-extra-offset));
+  scrollbar-gutter: stable;
+}
+
+.withmd-anon-share-panel .withmd-editor-scroll .withmd-prose,
+.withmd-anon-share-panel .withmd-editor-scroll .ProseMirror {
+  width: 100%;
 }
 
 .withmd-anon-share-toolbar {

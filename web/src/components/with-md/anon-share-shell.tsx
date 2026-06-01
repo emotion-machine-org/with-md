@@ -557,7 +557,8 @@ export default function AnonShareShell({ shareId }: Props) {
               <div className="withmd-anon-editor-wrap withmd-fill withmd-collab-hydration-wrap">
                 {useLocalEditorFallback ? (
                   <CollabEditor
-                    key={`local-share:${share.shortId}:${share.contentHash}`}
+                    // Keep fallback mounted across save-version changes; remounting can steal focus and remeasure layout.
+                    key={`local-share:${share.shortId}`}
                     mdFileId={`local-share:${share.shortId}`}
                     contentHash={share.contentHash}
                     realtimeEnabled={false}
