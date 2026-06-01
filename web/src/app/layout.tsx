@@ -5,15 +5,16 @@ import { siteUrl } from '@/lib/with-md/site';
 
 const enablePrivateFonts = process.env.WITHMD_ENABLE_PRIVATE_FONTS === '1';
 const privateFontsStylesheetUrl = process.env.WITHMD_PRIVATE_FONTS_STYLESHEET_URL?.trim() || '/private-fonts.css';
-const siteDescription = 'Open-source filesystem-first markdown collaboration for humans and agents.';
+const siteTitle = 'with.md - Markdown collaboration for developers and agents';
+const siteDescription = 'Share anonymous markdown links and collaborate on GitHub-backed docs with developers and agents.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: 'with.md',
+  title: siteTitle,
   description: siteDescription,
   openGraph: {
     type: 'website',
-    title: 'with.md',
+    title: siteTitle,
     description: siteDescription,
     url: '/',
     images: [
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'with.md',
+    title: siteTitle,
     description: siteDescription,
     images: ['/with-md.jpg'],
   },

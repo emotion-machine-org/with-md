@@ -1,6 +1,6 @@
-# [with.md](http://with.md)
+# [with.md](https://with.md)
 
-Markdowns are dope! Markdowns are kino!
+with.md gives markdown-heavy teams a GitHub-backed collaboration workspace for live editing, comments, and review without leaving portable `.md` files.
 
 Filesystem-first markdown collaboration for humans and agents. Edit markdown files stored in GitHub repositories with real-time collaboration, live cursors, anchored comments, and instant synchronization, no proprietary formats, no lock-in.
 

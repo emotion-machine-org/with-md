@@ -15,6 +15,11 @@ import { useScrollbarWidth } from '@/hooks/with-md/use-scrollbar-width';
 import { cursorColorForUser } from '@/lib/with-md/cursor-colors';
 import { hasMeaningfulDiff } from '@/lib/with-md/markdown-diff';
 import { captureWithMdCoreActionOnce, fileExtensionFromName } from '@/lib/with-md/posthog';
+import {
+  savePublicShareContent,
+  ShareVersionConflictError,
+  type PublicShareSnapshot,
+} from '@/lib/with-md/public-share-save';
 
 interface SharePayload {
   shortId: string;
@@ -98,6 +103,7 @@ export default function AnonShareShell({ shareId }: Props) {
   const [editorHydrated, setEditorHydrated] = useState(false);
   const [editorHydrationSlow, setEditorHydrationSlow] = useState(false);
   const shareMenuRef = useRef<HTMLDivElement | null>(null);
+  const shareRef = useRef<SharePayload | null>(null);
   const lastSourceSaveRef = useRef('');
   const { ref: sourceScrollRef, scrollbarWidth: sourceScrollbarWidth } = useScrollbarWidth<HTMLPreElement>();
   const { ref: markdownScrollRef, scrollbarWidth: markdownScrollbarWidth } = useScrollbarWidth<HTMLDivElement>();
@@ -184,6 +190,10 @@ export default function AnonShareShell({ shareId }: Props) {
     document.title = titleFromContent(content);
   }, [content]);
 
+  useEffect(() => {
+    shareRef.current = share;
+  }, [share]);
+
   const viewUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
     return `${window.location.origin}/s/${encodeURIComponent(shareId)}`;
@@ -200,7 +210,16 @@ export default function AnonShareShell({ shareId }: Props) {
   const canRealtimeEdit = canEdit && share?.syntaxSupportStatus !== 'unsupported';
   const showEditor = Boolean(canRealtimeEdit);
   const showSource = userMode === 'source';
+  const useLocalEditorFallback = showEditor && !showSource && editorHydrationSlow && !editorHydrated;
   const sourceDirty = canEdit && hasMeaningfulDiff(sourceDraft, content);
+  const localEditorDirty = Boolean(
+    canEdit &&
+    showEditor &&
+    editorHydrationSlow &&
+    !editorHydrated &&
+    share &&
+    hasMeaningfulDiff(content, share.content),
+  );
   const renderedReadContent = useMemo(() => stripLeadingFrontmatter(content), [content]);
   const downloadFileName = useMemo(() => {
     const fallback = 'shared-markdown.md';
@@ -227,7 +246,7 @@ export default function AnonShareShell({ shareId }: Props) {
 
   useEffect(() => {
     if (!editorHydrationSlow || editorHydrated || !showEditor || showSource) return;
-    setStatusMessage('Realtime editor is still connecting. Showing a read-only preview until it is ready.');
+    setStatusMessage('Realtime editor is still connecting. You can keep editing here; changes will save without live cursors for now.');
   }, [editorHydrated, editorHydrationSlow, showEditor, showSource]);
 
   const onCopyViewLink = useCallback(async () => {
@@ -312,6 +331,46 @@ export default function AnonShareShell({ shareId }: Props) {
     setSourceDraft(nextContent);
   }, [trackAnonShareEdit]);
 
+  const applyShareSnapshot = useCallback((snapshot: PublicShareSnapshot) => {
+    lastSourceSaveRef.current = snapshot.content;
+    setContent(snapshot.content);
+    setSourceDraft(snapshot.content);
+    setShare((prev) => prev
+      ? {
+        ...prev,
+        content: snapshot.content,
+        contentHash: snapshot.contentHash,
+        sizeBytes: snapshot.sizeBytes ?? prev.sizeBytes,
+        updatedAt: snapshot.updatedAt ?? Date.now(),
+      }
+      : prev);
+  }, []);
+
+  const saveShareContent = useCallback(async (
+    nextContent: string,
+    baselineContent: string,
+    successMessage: string,
+  ) => {
+    const currentShare = shareRef.current;
+    if (!canEdit || !editSecret || !currentShare) return;
+
+    const result = await savePublicShareContent({
+      shareId,
+      editSecret,
+      nextContent,
+      baselineContent,
+      currentVersion: currentShare.contentHash,
+    });
+
+    applyShareSnapshot({
+      content: result.content,
+      contentHash: result.version,
+      sizeBytes: result.sizeBytes,
+      updatedAt: result.updatedAt,
+    });
+    setStatusMessage(successMessage);
+  }, [applyShareSnapshot, canEdit, editSecret, shareId]);
+
   const saveSourceDraft = useCallback(async (nextContent: string) => {
     if (!canEdit || !editSecret || !share) return;
     const normalizedContent = nextContent.replace(/\r\n/g, '\n');
@@ -319,45 +378,14 @@ export default function AnonShareShell({ shareId }: Props) {
     if (lastSourceSaveRef.current === normalizedContent) return;
 
     try {
-      const response = await fetch(`/api/public/share/${encodeURIComponent(shareId)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          editSecret,
-          content: normalizedContent,
-          ifMatch: share.contentHash,
-        }),
-      });
-      const data = (await response.json().catch(() => null)) as
-        | {
-          error?: string;
-          version?: string;
-          sizeBytes?: number;
-          updatedAt?: number;
-        }
-        | null;
-
-      if (!response.ok) {
-        throw new Error(data?.error ?? 'Could not save source changes.');
-      }
-
-      lastSourceSaveRef.current = normalizedContent;
-      setContent(normalizedContent);
-      setSourceDraft(normalizedContent);
-      setShare((prev) => prev
-        ? {
-          ...prev,
-          content: normalizedContent,
-          contentHash: data?.version ?? prev.contentHash,
-          sizeBytes: data?.sizeBytes ?? prev.sizeBytes,
-          updatedAt: data?.updatedAt ?? Date.now(),
-        }
-        : prev);
-      setStatusMessage('Source changes saved.');
+      await saveShareContent(normalizedContent, content, 'Source changes saved.');
     } catch (saveError) {
+      if (saveError instanceof ShareVersionConflictError && saveError.latestShare) {
+        applyShareSnapshot(saveError.latestShare);
+      }
       setStatusMessage(saveError instanceof Error ? saveError.message : 'Could not save source changes.');
     }
-  }, [canEdit, content, editSecret, share, shareId]);
+  }, [applyShareSnapshot, canEdit, content, editSecret, saveShareContent, share]);
 
   useEffect(() => {
     if (!showSource || !sourceDirty) return;
@@ -368,6 +396,22 @@ export default function AnonShareShell({ shareId }: Props) {
       window.clearTimeout(timer);
     };
   }, [saveSourceDraft, showSource, sourceDirty, sourceDraft]);
+
+  useEffect(() => {
+    if (!localEditorDirty || !share) return;
+    const baselineContent = share.content;
+    const timer = window.setTimeout(() => {
+      saveShareContent(content, baselineContent, 'Changes saved.').catch((saveError) => {
+        if (saveError instanceof ShareVersionConflictError && saveError.latestShare) {
+          applyShareSnapshot(saveError.latestShare);
+        }
+        setStatusMessage(saveError instanceof Error ? saveError.message : 'Could not save changes.');
+      });
+    }, 1200);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [applyShareSnapshot, content, localEditorDirty, saveShareContent, share]);
 
   useEffect(() => {
     if (!shareMenuOpen) return;
@@ -529,26 +573,14 @@ export default function AnonShareShell({ shareId }: Props) {
           <div className="withmd-doc-stage withmd-fill">
             {showEditor && !showSource ? (
               <div className="withmd-anon-editor-wrap withmd-fill withmd-collab-hydration-wrap">
-                {!editorHydrated ? (
-                  <div className="withmd-column withmd-fill withmd-gap-2">
-                    <div
-                      ref={markdownScrollRef}
-                      className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill"
-                      style={{ '--withmd-editor-scrollbar-width': `${markdownScrollbarWidth}px` } as CSSProperties}
-                    >
-                      <article className="withmd-prose withmd-markdown withmd-anon-markdown">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={proseMarkdownComponents}>{renderedReadContent}</ReactMarkdown>
-                      </article>
-                    </div>
-                  </div>
-                ) : null}
-                <div className={editorHydrated ? 'withmd-collab-editor-visible' : 'withmd-collab-editor-hidden'}>
+                {useLocalEditorFallback ? (
                   <CollabEditor
-                    mdFileId={`share:${share.shortId}`}
+                    key={`local-share:${share.shortId}:${share.contentHash}`}
+                    mdFileId={`local-share:${share.shortId}`}
                     contentHash={share.contentHash}
-                    realtimeEnabled
+                    realtimeEnabled={false}
                     content={content}
-                    authToken={editSecret}
+                    authToken=""
                     collabUser={collabUser}
                     comments={[]}
                     anchorByCommentId={new Map()}
@@ -566,9 +598,50 @@ export default function AnonShareShell({ shareId }: Props) {
                     onMarkRequestApplied={() => {}}
                     formatBarOpen={formatBarOpen}
                     commentsOpen={false}
-                    onHydratedChange={setEditorHydrated}
                   />
-                </div>
+                ) : !editorHydrated ? (
+                  <div className="withmd-column withmd-fill withmd-gap-2">
+                    <div
+                      ref={markdownScrollRef}
+                      className="withmd-prosemirror-wrap withmd-editor-scroll withmd-fill"
+                      style={{ '--withmd-editor-scrollbar-width': `${markdownScrollbarWidth}px` } as CSSProperties}
+                    >
+                      <article className="withmd-prose withmd-markdown withmd-anon-markdown">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={proseMarkdownComponents}>{renderedReadContent}</ReactMarkdown>
+                      </article>
+                    </div>
+                  </div>
+                ) : null}
+                {!useLocalEditorFallback ? (
+                  <div className={editorHydrated ? 'withmd-collab-editor-visible' : 'withmd-collab-editor-hidden'}>
+                    <CollabEditor
+                      key={`share:${share.shortId}:${share.contentHash}`}
+                      mdFileId={`share:${share.shortId}`}
+                      contentHash={share.contentHash}
+                      realtimeEnabled
+                      content={content}
+                      authToken={editSecret}
+                      collabUser={collabUser}
+                      comments={[]}
+                      anchorByCommentId={new Map()}
+                      activeCommentId={null}
+                      focusedComment={null}
+                      focusRequestId={0}
+                      pendingSelection={null}
+                      onContentChange={onEditorContentChange}
+                      onSelectionDraftChange={() => {}}
+                      onSelectComment={() => {}}
+                      onReplyComment={async () => {}}
+                      onCreateDraftComment={async () => {}}
+                      onResolveThread={async () => {}}
+                      markRequest={null}
+                      onMarkRequestApplied={() => {}}
+                      formatBarOpen={formatBarOpen}
+                      commentsOpen={false}
+                      onHydratedChange={setEditorHydrated}
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : showSource ? (
               <div className="withmd-column withmd-fill withmd-gap-2">

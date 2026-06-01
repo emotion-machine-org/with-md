@@ -1,5 +1,16 @@
 import { Node } from '@tiptap/core';
 import { renderMermaidSVG } from 'beautiful-mermaid';
+import {
+  MAX_MERMAID_SCALE,
+  MIN_MERMAID_SCALE,
+  applySvgScale,
+  clampMermaidScale,
+  getFitScale,
+  getSvgNaturalSize,
+  scrollNearestPageContainer,
+  shouldPassVerticalWheel,
+  type DiagramSize,
+} from '../mermaid-viewer-utils';
 
 export const MermaidBlock = Node.create({
   name: 'mermaidBlock',
@@ -42,16 +53,109 @@ export const MermaidBlock = Node.create({
       dom.className = 'withmd-mermaid-block';
       dom.contentEditable = 'false';
 
+      const viewport = document.createElement('div');
+      viewport.className = 'withmd-mermaid-viewport';
+
+      const zoomLayer = document.createElement('div');
+      zoomLayer.className = 'withmd-mermaid-zoom';
+
       const svgHost = document.createElement('div');
       svgHost.className = 'withmd-mermaid-svg';
+
+      zoomLayer.appendChild(svgHost);
+      viewport.appendChild(zoomLayer);
 
       const errorHost = document.createElement('pre');
       errorHost.className = 'withmd-mermaid-error';
       errorHost.style.display = 'none';
 
+      const zoomLabel = document.createElement('span');
+      zoomLabel.className = 'withmd-mermaid-zoom-label';
+      zoomLabel.style.display = 'none';
+
+      const controls = document.createElement('div');
+      controls.className = 'withmd-mermaid-controls';
+      controls.setAttribute('aria-label', 'Mermaid diagram zoom controls');
+
+      const zoomOutButton = document.createElement('button');
+      zoomOutButton.type = 'button';
+      zoomOutButton.className = 'withmd-mermaid-zoom-btn';
+      zoomOutButton.setAttribute('aria-label', 'Zoom out diagram');
+      zoomOutButton.title = 'Zoom out';
+      zoomOutButton.textContent = '-';
+
+      const zoomInButton = document.createElement('button');
+      zoomInButton.type = 'button';
+      zoomInButton.className = 'withmd-mermaid-zoom-btn';
+      zoomInButton.setAttribute('aria-label', 'Zoom in diagram');
+      zoomInButton.title = 'Zoom in';
+      zoomInButton.textContent = '+';
+
+      controls.appendChild(zoomOutButton);
+      controls.appendChild(zoomInButton);
+
       let editing = false;
       let currentCode = (node.attrs.code as string) || '';
       let textarea: HTMLTextAreaElement | null = null;
+      let scale = 1;
+      let diagramSize: DiagramSize | null = null;
+      let userZoomed = false;
+      let zoomLabelTimer: ReturnType<typeof setTimeout> | null = null;
+      let fitFrame: number | null = null;
+      const updateZoomButtons = () => {
+        zoomOutButton.disabled = scale <= MIN_MERMAID_SCALE + 0.01;
+        zoomInButton.disabled = scale >= MAX_MERMAID_SCALE - 0.01;
+      };
+
+      const fitDiagram = () => {
+        if (!diagramSize) return;
+        scale = getFitScale(viewport, diagramSize);
+        applySvgScale(svgHost, diagramSize, scale);
+        updateZoomButtons();
+      };
+
+      const updateZoom = (newScale: number, showLabel = true) => {
+        userZoomed = true;
+        scale = clampMermaidScale(newScale);
+        applySvgScale(svgHost, diagramSize, scale);
+        if (showLabel) {
+          zoomLabel.textContent = `${Math.round(scale * 100)}%`;
+          zoomLabel.style.display = '';
+          if (zoomLabelTimer) clearTimeout(zoomLabelTimer);
+          zoomLabelTimer = setTimeout(() => { zoomLabel.style.display = 'none'; }, 1200);
+        }
+        updateZoomButtons();
+      };
+
+      viewport.addEventListener('wheel', (e) => {
+        if (shouldPassVerticalWheel(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          scrollNearestPageContainer(viewport, e.deltaY);
+          return;
+        }
+
+        if (!e.ctrlKey && !e.metaKey) return;
+        e.preventDefault();
+        const factor = e.deltaY > 0 ? 0.9 : 1.1;
+        updateZoom(scale * factor);
+      }, { passive: false });
+
+      zoomOutButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        updateZoom(scale / 1.2);
+      });
+
+      zoomInButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        updateZoom(scale * 1.2);
+      });
+
+      controls.addEventListener('mousedown', (e) => e.stopPropagation());
+      controls.addEventListener('pointerdown', (e) => e.stopPropagation());
+      controls.addEventListener('dblclick', (e) => e.stopPropagation());
 
       const renderSvg = (code: string) => {
         currentCode = code;
@@ -63,10 +167,20 @@ export const MermaidBlock = Node.create({
             font: 'Geist, ui-sans-serif, system-ui, sans-serif',
           });
           svgHost.innerHTML = svg;
-          svgHost.style.display = '';
+          viewport.style.display = '';
+          controls.style.display = '';
           errorHost.style.display = 'none';
+          userZoomed = false;
+          const svgEl = svgHost.querySelector('svg') as SVGSVGElement | null;
+          diagramSize = svgEl ? getSvgNaturalSize(svgEl) : null;
+          fitDiagram();
+          if (fitFrame !== null) cancelAnimationFrame(fitFrame);
+          fitFrame = requestAnimationFrame(() => {
+            if (!userZoomed) fitDiagram();
+          });
         } catch (err) {
-          svgHost.style.display = 'none';
+          viewport.style.display = 'none';
+          controls.style.display = 'none';
           errorHost.style.display = '';
           const msg = err instanceof Error ? err.message : String(err);
           errorHost.textContent = `Mermaid render error:\n${msg}\n\n${code}`;
@@ -79,8 +193,10 @@ export const MermaidBlock = Node.create({
         editing = false;
         textarea = null;
         dom.classList.remove('is-editing');
-        dom.appendChild(svgHost);
+        dom.appendChild(controls);
+        dom.appendChild(viewport);
         dom.appendChild(errorHost);
+        dom.appendChild(zoomLabel);
 
         const pos = typeof getPos === 'function' ? getPos() : null;
         if (pos != null && newCode !== currentCode) {
@@ -108,8 +224,10 @@ export const MermaidBlock = Node.create({
         textarea = null;
         dom.classList.remove('is-editing');
         dom.innerHTML = '';
-        dom.appendChild(svgHost);
+        dom.appendChild(controls);
+        dom.appendChild(viewport);
         dom.appendChild(errorHost);
+        dom.appendChild(zoomLabel);
         renderSvg(currentCode);
       };
 
@@ -145,8 +263,11 @@ export const MermaidBlock = Node.create({
         enterEdit();
       });
 
-      dom.appendChild(svgHost);
+      dom.appendChild(controls);
+      dom.appendChild(viewport);
       dom.appendChild(errorHost);
+      dom.appendChild(zoomLabel);
+      updateZoomButtons();
       renderSvg(currentCode);
 
       return {
@@ -162,10 +283,13 @@ export const MermaidBlock = Node.create({
           return true;
         },
         stopEvent(event: Event) {
+          if (controls.contains(event.target as HTMLElement)) return true;
           if (editing && dom.contains(event.target as HTMLElement)) return true;
           return false;
         },
         destroy() {
+          if (zoomLabelTimer) clearTimeout(zoomLabelTimer);
+          if (fitFrame !== null) cancelAnimationFrame(fitFrame);
           if (editing) commitEdit();
         },
       };
