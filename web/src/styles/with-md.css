@@ -1987,14 +1987,15 @@
 }
 
 .withmd-notice-stack {
-  position: absolute;
-  top: 10px;
-  right: 8px;
+  position: fixed;
+  top: max(72px, calc(env(safe-area-inset-top) + 12px));
+  right: max(16px, calc(env(safe-area-inset-right) + 16px));
   z-index: 22;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: min(420px, calc(100% - 20px));
+  width: min(420px, calc(100vw - 32px));
+  pointer-events: none;
 }
 
 .withmd-notice {
@@ -2008,6 +2009,7 @@
   padding: 6px 10px;
   font-size: 12px;
   line-height: 1.25;
+  pointer-events: auto;
 }
 
 .withmd-notice-accent {
