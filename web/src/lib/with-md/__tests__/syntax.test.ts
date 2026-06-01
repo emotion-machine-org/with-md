@@ -47,6 +47,28 @@ describe('detectUnsupportedSyntax', () => {
     expect(result.reasons).toHaveLength(0);
   });
 
+  it('flags markdown images so rich edit cannot drop them to captions', () => {
+    const md = `# Asset\n\n![Revenue chart](https://example.com/chart.png)`;
+    const result = detectUnsupportedSyntax(md);
+    expect(result.supported).toBe(false);
+    expect(result.reasons).toContain('images');
+  });
+
+  it('flags reference-style links and images', () => {
+    const md = [
+      '# References',
+      '',
+      'Read [the spec][spec] and inspect ![diagram][diagram].',
+      '',
+      '[spec]: https://example.com/spec',
+      '[diagram]: https://example.com/diagram.png',
+    ].join('\n');
+    const result = detectUnsupportedSyntax(md);
+    expect(result.supported).toBe(false);
+    expect(result.reasons).toContain('images');
+    expect(result.reasons).toContain('reference_links');
+  });
+
   it('flags mdx/jsx syntax', () => {
     const md = `import X from './x'\n\n<MyComponent answer={42} />`;
     const result = detectUnsupportedSyntax(md);

@@ -13,6 +13,7 @@ import { proseMarkdownComponents } from '@/components/with-md/prose-markdown-com
 import SourceEditor from '@/components/with-md/source-editor';
 import { useScrollbarWidth } from '@/hooks/with-md/use-scrollbar-width';
 import { cursorColorForUser } from '@/lib/with-md/cursor-colors';
+import { protectMarkdownSave, type ProtectedMarkdownLoss } from '@/lib/with-md/markdown-format-guard';
 import { hasMeaningfulDiff } from '@/lib/with-md/markdown-diff';
 import {
   savePublicShareContent,
@@ -82,6 +83,21 @@ function toggleTheme() {
   } catch {
     /* noop */
   }
+}
+
+function blockedFormatLossMessage(loss: ProtectedMarkdownLoss) {
+  const kinds = new Set(loss.missing.map((item) => item.kind));
+  const names = [
+    kinds.has('image') ? 'images' : null,
+    kinds.has('link') || kinds.has('reference') ? 'links' : null,
+    kinds.has('table') ? 'tables' : null,
+    kinds.has('code') ? 'code' : null,
+    kinds.has('html') ? 'HTML' : null,
+    kinds.has('task_list') ? 'task lists' : null,
+    kinds.has('frontmatter') ? 'frontmatter' : null,
+  ].filter(Boolean);
+  const suffix = names.length > 0 ? ` (${names.join(', ')})` : '';
+  return `Rich edit was stopped because this markdown has syntax the fallback editor cannot safely save${suffix}. Source mode kept the original markdown intact.`;
 }
 
 export default function AnonShareShell({ shareId }: Props) {
@@ -382,6 +398,17 @@ export default function AnonShareShell({ shareId }: Props) {
   useEffect(() => {
     if (!localEditorDirty || !share) return;
     const baselineContent = share.content;
+    const saveDecision = protectMarkdownSave(baselineContent, content);
+    if (!saveDecision.safe) {
+      lastSourceSaveRef.current = saveDecision.content;
+      setContent(saveDecision.content);
+      setSourceDraft(saveDecision.content);
+      setUserMode('source');
+      setFormatBarOpen(false);
+      setStatusMessage(blockedFormatLossMessage(saveDecision.loss));
+      return;
+    }
+
     const timer = window.setTimeout(() => {
       saveShareContent(content, baselineContent, 'Changes saved.').catch((saveError) => {
         if (saveError instanceof ShareVersionConflictError && saveError.latestShare) {
