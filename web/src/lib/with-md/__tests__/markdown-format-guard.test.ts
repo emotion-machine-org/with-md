@@ -29,6 +29,20 @@ describe('markdown format guard', () => {
     }
   });
 
+  it('keeps double-bracket image markdown when fallback edit would save only the caption', () => {
+    const before = '# Release\n\n![[Flow diagram]](https://example.com/flow.png)\n\nReady.';
+    const after = '# Release\n\nFlow diagram\n\nReady with edits.';
+
+    const decision = protectMarkdownSave(before, after);
+
+    expect(decision.safe).toBe(false);
+    expect(decision.content).toBe(before);
+    if (!decision.safe) {
+      expect(decision.loss.missing[0]?.kind).toBe('image');
+      expect(decision.loss.missing[0]?.value).toBe('![[Flow diagram]](https://example.com/flow.png)');
+    }
+  });
+
   it('allows edits when protected markdown is still present', () => {
     const before = [
       '# Release',
