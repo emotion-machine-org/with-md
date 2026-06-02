@@ -47,18 +47,18 @@ describe('detectUnsupportedSyntax', () => {
     expect(result.reasons).toHaveLength(0);
   });
 
-  it('flags markdown images so rich edit cannot drop them to captions', () => {
+  it('accepts direct markdown images because the editor can round-trip them', () => {
     const md = `# Asset\n\n![Revenue chart](https://example.com/chart.png)`;
     const result = detectUnsupportedSyntax(md);
-    expect(result.supported).toBe(false);
-    expect(result.reasons).toContain('images');
+    expect(result.supported).toBe(true);
+    expect(result.reasons).toHaveLength(0);
   });
 
-  it('flags double-bracket image captions so rich edit cannot drop them to captions', () => {
+  it('accepts double-bracket image captions because raw markdown is preserved', () => {
     const md = `# Asset\n\n![[Revenue chart]](https://example.com/chart.png)`;
     const result = detectUnsupportedSyntax(md);
-    expect(result.supported).toBe(false);
-    expect(result.reasons).toContain('images');
+    expect(result.supported).toBe(true);
+    expect(result.reasons).toHaveLength(0);
   });
 
   it('flags reference-style links and images', () => {

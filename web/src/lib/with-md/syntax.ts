@@ -4,7 +4,6 @@ const FRONTMATTER_RE = /^---\n[\s\S]*?\n---\n/;
 const DIRECTIVE_RE = /^:{2,}\w+/m;
 const FENCED_CODE_RE = /(^|\n)(```|~~~)[^\n]*\n[\s\S]*?\n\2(?=\n|$)/g;
 const INLINE_CODE_RE = /`[^`\n]+`/g;
-const IMAGE_RE = /!\[(?:\\.|[^\]\\\n]|\[[^\]\n]*\])*\]\([^)\n]+\)/;
 const REFERENCE_IMAGE_RE = /!\[(?:\\.|[^\]\\\n]|\[[^\]\n]*\])*\]\[(?:\\.|[^\]\\\n]|\[[^\]\n]*\])*\]/;
 const REFERENCE_LINK_RE = /(^|[^!])\[[^\]\n]+\]\[[^\]\n]*\]/;
 const REFERENCE_DEFINITION_RE = /^[ \t]{0,3}\[[^\]\n]+]:[ \t]+\S.*$/m;
@@ -21,7 +20,7 @@ export function detectUnsupportedSyntax(markdown: string): SyntaxSupportResult {
 
   if (FRONTMATTER_RE.test(markdown)) reasons.push('frontmatter');
   if (DIRECTIVE_RE.test(markdown)) reasons.push('directives');
-  if (IMAGE_RE.test(sanitized) || REFERENCE_IMAGE_RE.test(sanitized)) {
+  if (REFERENCE_IMAGE_RE.test(sanitized)) {
     reasons.push('images');
   }
   if (REFERENCE_LINK_RE.test(sanitized) || REFERENCE_DEFINITION_RE.test(sanitized)) {

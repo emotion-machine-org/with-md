@@ -802,6 +802,12 @@
   margin: 24px 0;
 }
 
+.withmd-prose img.withmd-inline-image {
+  display: inline-block;
+  margin: 8px 0;
+  vertical-align: middle;
+}
+
 /* Aliases so existing class names keep working */
 .withmd-markdown { /* inherits via .withmd-prose */ }
 
