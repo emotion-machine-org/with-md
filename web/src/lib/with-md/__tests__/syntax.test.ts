@@ -54,6 +54,13 @@ describe('detectUnsupportedSyntax', () => {
     expect(result.reasons).toContain('images');
   });
 
+  it('flags double-bracket image captions so rich edit cannot drop them to captions', () => {
+    const md = `# Asset\n\n![[Revenue chart]](https://example.com/chart.png)`;
+    const result = detectUnsupportedSyntax(md);
+    expect(result.supported).toBe(false);
+    expect(result.reasons).toContain('images');
+  });
+
   it('flags reference-style links and images', () => {
     const md = [
       '# References',

@@ -20,6 +20,7 @@ import {
   ShareVersionConflictError,
   type PublicShareSnapshot,
 } from '@/lib/with-md/public-share-save';
+import { detectUnsupportedSyntax } from '@/lib/with-md/syntax';
 
 interface SharePayload {
   shortId: string;
@@ -330,6 +331,7 @@ export default function AnonShareShell({ shareId }: Props) {
   }, []);
 
   const applyShareSnapshot = useCallback((snapshot: PublicShareSnapshot) => {
+    const syntax = detectUnsupportedSyntax(snapshot.content);
     lastSourceSaveRef.current = snapshot.content;
     setContent(snapshot.content);
     setSourceDraft(snapshot.content);
@@ -339,9 +341,23 @@ export default function AnonShareShell({ shareId }: Props) {
         content: snapshot.content,
         contentHash: snapshot.contentHash,
         sizeBytes: snapshot.sizeBytes ?? prev.sizeBytes,
+        syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+        syntaxSupportReasons: syntax.reasons,
         updatedAt: snapshot.updatedAt ?? Date.now(),
       }
       : prev);
+    if (!syntax.supported) {
+      const reasons = syntax.reasons.join(', ');
+      setUserMode('source');
+      setFormatBarOpen(false);
+      setEditorHydrated(false);
+      setEditorHydrationSlow(false);
+      setStatusMessage(
+        reasons
+          ? `This markdown uses unsupported syntax for realtime rich editing (${reasons}). Opened in Source mode.`
+          : 'This markdown uses unsupported syntax for realtime rich editing. Opened in Source mode.',
+      );
+    }
   }, []);
 
   const saveShareContent = useCallback(async (

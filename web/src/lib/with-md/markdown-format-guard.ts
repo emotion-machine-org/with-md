@@ -27,8 +27,8 @@ interface ProtectedMarkdownToken {
 const FENCED_CODE_RE = /(^|\n)(```|~~~)[^\n]*\n[\s\S]*?\n\2(?=\n|$)/g;
 const FRONTMATTER_RE = /^---\n[\s\S]*?\n---(?=\n|$)/g;
 const INLINE_CODE_RE = /`+[^`\n]+`+/g;
-const IMAGE_RE = /!\[[^\]\n]*\]\([^)\n]+\)/g;
-const REFERENCE_IMAGE_RE = /!\[[^\]\n]*\]\[[^\]\n]*\]/g;
+const IMAGE_RE = /!\[(?:\\.|[^\]\\\n]|\[[^\]\n]*\])*\]\([^)\n]+\)/g;
+const REFERENCE_IMAGE_RE = /!\[(?:\\.|[^\]\\\n]|\[[^\]\n]*\])*\]\[(?:\\.|[^\]\\\n]|\[[^\]\n]*\])*\]/g;
 const INLINE_LINK_RE = /(^|[^!])(\[[^\]\n]+\]\([^)\n]+\))/g;
 const REFERENCE_LINK_RE = /(^|[^!])(\[[^\]\n]+\]\[[^\]\n]*\])/g;
 const REFERENCE_DEFINITION_RE = /^[ \t]{0,3}\[[^\]\n]+]:[ \t]+\S.*$/gm;
