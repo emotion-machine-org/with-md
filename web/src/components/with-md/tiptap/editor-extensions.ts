@@ -21,6 +21,7 @@ import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 import { CommentMark } from '@/components/with-md/tiptap/comment-mark';
+import { InlineImage } from '@/components/with-md/tiptap/inline-image';
 import { MermaidBlock } from '@/components/with-md/tiptap/mermaid-block';
 import { TableBlock } from '@/components/with-md/tiptap/table-block';
 
@@ -95,6 +96,7 @@ export function buildEditorExtensions(params: {
       openOnClick: false,
       HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
     }),
+    InlineImage,
     CommentMark,
     TableBlock,
     TaskList,

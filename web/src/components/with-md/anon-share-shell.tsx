@@ -165,10 +165,16 @@ export default function AnonShareShell({ shareId }: Props) {
           return;
         }
 
-        setShare(data.share);
-        setContent(data.share.content);
-        setSourceDraft(data.share.content);
-        lastSourceSaveRef.current = data.share.content;
+        const syntax = detectUnsupportedSyntax(data.share.content);
+        const nextShare = {
+          ...data.share,
+          syntaxSupportStatus: syntax.supported ? 'supported' : 'unsupported',
+          syntaxSupportReasons: syntax.reasons,
+        };
+        setShare(nextShare);
+        setContent(nextShare.content);
+        setSourceDraft(nextShare.content);
+        lastSourceSaveRef.current = nextShare.content;
         const editable = Boolean(data.canEdit);
         setCanEdit(editable);
 
@@ -177,8 +183,8 @@ export default function AnonShareShell({ shareId }: Props) {
           return;
         }
 
-        if (editable && data.share.syntaxSupportStatus === 'unsupported') {
-          const reasons = (data.share.syntaxSupportReasons ?? []).join(', ');
+        if (editable && nextShare.syntaxSupportStatus === 'unsupported') {
+          const reasons = nextShare.syntaxSupportReasons.join(', ');
           setUserMode('source');
           setStatusMessage(
             reasons
@@ -258,7 +264,7 @@ export default function AnonShareShell({ shareId }: Props) {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [editSecret, share?.contentHash, shareId, showEditor, showSource]);
+  }, [editSecret, shareId, showEditor, showSource]);
 
   useEffect(() => {
     if (!editorHydrationSlow || editorHydrated || !showEditor || showSource) return;
@@ -330,11 +336,18 @@ export default function AnonShareShell({ shareId }: Props) {
     setSourceDraft(nextContent);
   }, []);
 
-  const applyShareSnapshot = useCallback((snapshot: PublicShareSnapshot) => {
+  const applyShareSnapshot = useCallback((
+    snapshot: PublicShareSnapshot,
+    options?: { syncSourceDraft?: boolean; announceUnsupported?: boolean },
+  ) => {
     const syntax = detectUnsupportedSyntax(snapshot.content);
+    const syncSourceDraft = options?.syncSourceDraft ?? true;
+    const announceUnsupported = options?.announceUnsupported ?? true;
     lastSourceSaveRef.current = snapshot.content;
     setContent(snapshot.content);
-    setSourceDraft(snapshot.content);
+    if (syncSourceDraft) {
+      setSourceDraft(snapshot.content);
+    }
     setShare((prev) => prev
       ? {
         ...prev,
@@ -352,18 +365,21 @@ export default function AnonShareShell({ shareId }: Props) {
       setFormatBarOpen(false);
       setEditorHydrated(false);
       setEditorHydrationSlow(false);
-      setStatusMessage(
-        reasons
-          ? `This markdown uses unsupported syntax for realtime rich editing (${reasons}). Opened in Source mode.`
-          : 'This markdown uses unsupported syntax for realtime rich editing. Opened in Source mode.',
-      );
+      if (announceUnsupported) {
+        setStatusMessage(
+          reasons
+            ? `This markdown uses unsupported syntax for realtime rich editing (${reasons}). Opened in Source mode.`
+            : 'This markdown uses unsupported syntax for realtime rich editing. Opened in Source mode.',
+        );
+      }
     }
   }, []);
 
   const saveShareContent = useCallback(async (
     nextContent: string,
     baselineContent: string,
-    successMessage: string,
+    successMessage: string | null,
+    snapshotOptions?: { syncSourceDraft?: boolean; announceUnsupported?: boolean },
   ) => {
     const currentShare = shareRef.current;
     if (!canEdit || !editSecret || !currentShare) return;
@@ -381,8 +397,10 @@ export default function AnonShareShell({ shareId }: Props) {
       contentHash: result.version,
       sizeBytes: result.sizeBytes,
       updatedAt: result.updatedAt,
-    });
-    setStatusMessage(successMessage);
+    }, snapshotOptions);
+    if (successMessage) {
+      setStatusMessage(successMessage);
+    }
   }, [applyShareSnapshot, canEdit, editSecret, shareId]);
 
   const saveSourceDraft = useCallback(async (nextContent: string) => {
@@ -392,7 +410,10 @@ export default function AnonShareShell({ shareId }: Props) {
     if (lastSourceSaveRef.current === normalizedContent) return;
 
     try {
-      await saveShareContent(normalizedContent, content, 'Source changes saved.');
+      await saveShareContent(normalizedContent, content, null, {
+        syncSourceDraft: false,
+        announceUnsupported: false,
+      });
     } catch (saveError) {
       if (saveError instanceof ShareVersionConflictError && saveError.latestShare) {
         applyShareSnapshot(saveError.latestShare);
@@ -426,7 +447,7 @@ export default function AnonShareShell({ shareId }: Props) {
     }
 
     const timer = window.setTimeout(() => {
-      saveShareContent(content, baselineContent, 'Changes saved.').catch((saveError) => {
+      saveShareContent(content, baselineContent, null).catch((saveError) => {
         if (saveError instanceof ShareVersionConflictError && saveError.latestShare) {
           applyShareSnapshot(saveError.latestShare);
         }

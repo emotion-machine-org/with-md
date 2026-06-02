@@ -7,6 +7,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { prosemirrorJSONToYXmlFragment, yDocToProsemirrorJSON } from 'y-prosemirror';
 import * as Y from 'yjs';
 
+import { InlineImage } from './inline-image.js';
 import { MermaidBlock } from './mermaid-block.js';
 import { TableBlock } from './table-block.js';
 
@@ -107,7 +108,14 @@ async function convexCall(path: string, body: unknown, timeoutMs = DEFAULT_CONVE
   return response.json();
 }
 
-const MARKDOWN_EXTENSIONS = [MermaidBlock, StarterKit.configure({ undoRedo: false }), TableBlock, TaskList, TaskItem];
+const MARKDOWN_EXTENSIONS = [
+  MermaidBlock,
+  StarterKit.configure({ undoRedo: false }),
+  InlineImage,
+  TableBlock,
+  TaskList,
+  TaskItem,
+];
 const MARKDOWN_MANAGER = new MarkdownManager({
   extensions: MARKDOWN_EXTENSIONS,
 });
