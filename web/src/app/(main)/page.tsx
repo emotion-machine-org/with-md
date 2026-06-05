@@ -280,25 +280,25 @@ export default function Home() {
           <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill">
             <div className="withmd-doc-scroll">
               <div className="withmd-landing-inner">
-                <h1 className="withmd-landing-title">Collaborate with.md files</h1>
+                <h1 className="withmd-landing-title">Send an editable markdown link</h1>
                 <p className="withmd-landing-tagline">
-                  Share and edit markdown files. With live cursors,{' '}
+                  Share one `.md` file as read and edit links. The source stays clean while live cursors,{' '}
                   <span className="withmd-landing-animated-word">{animatedSyncWord}</span>
                   <span className="withmd-landing-cursor-inline withmd-landing-tagline-cursor" style={{ color: LANDING_ANIMATED_CURSOR_COLOR }}>
                     <span className="collaboration-cursor__caret" aria-hidden="true">
                       <span className="collaboration-cursor__label">{LANDING_ANIMATED_CURSOR_NAME}</span>
                     </span>
                   </span>{' '}
-                  sync, and comments.
+                  sync, and comments handle collaboration.
                 </p>
 
                 <hr className="withmd-landing-rule withmd-landing-anon-divider" />
 
                 <div className="withmd-landing-section withmd-landing-anon-section">
-                  <h2 className="withmd-landing-h2">Share markdown instantly </h2>
+                  <h2 className="withmd-landing-h2">Create a clean markdown share</h2>
                   <p className="withmd-landing-body withmd-landing-anon-copy">
                     Drag one `.md` file here, or upload manually. You get a read link and an edit
-                    link. ... or{' '}
+                    link without moving the source into another doc tool. ... or{' '}
                     <button
                       type="button"
                       className="withmd-landing-create-blank"
