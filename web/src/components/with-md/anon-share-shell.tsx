@@ -13,6 +13,8 @@ import { proseMarkdownComponents } from '@/components/with-md/prose-markdown-com
 import SourceEditor from '@/components/with-md/source-editor';
 import { useScrollbarWidth } from '@/hooks/with-md/use-scrollbar-width';
 import { cursorColorForUser } from '@/lib/with-md/cursor-colors';
+import { captureFirstUseClientEvent } from '@/lib/with-md/first-use-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
 import { protectMarkdownSave, type ProtectedMarkdownLoss } from '@/lib/with-md/markdown-format-guard';
 import { hasMeaningfulDiff } from '@/lib/with-md/markdown-diff';
 import {
@@ -120,6 +122,7 @@ export default function AnonShareShell({ shareId }: Props) {
   const [editorHydrationSlow, setEditorHydrationSlow] = useState(false);
   const shareMenuRef = useRef<HTMLDivElement | null>(null);
   const shareRef = useRef<SharePayload | null>(null);
+  const trackedEditOpenRef = useRef<string | null>(null);
   const lastSourceSaveRef = useRef('');
   const { ref: sourceScrollRef, scrollbarWidth: sourceScrollbarWidth } = useScrollbarWidth<HTMLPreElement>();
   const { ref: markdownScrollRef, scrollbarWidth: markdownScrollbarWidth } = useScrollbarWidth<HTMLDivElement>();
@@ -177,6 +180,20 @@ export default function AnonShareShell({ shareId }: Props) {
         lastSourceSaveRef.current = nextShare.content;
         const editable = Boolean(data.canEdit);
         setCanEdit(editable);
+
+        if (editable && editSecret && trackedEditOpenRef.current !== nextShare.shortId) {
+          trackedEditOpenRef.current = nextShare.shortId;
+          captureFirstUseClientEvent({
+            event: FIRST_USE_EVENTS.editLinkOpened,
+            flow: 'anonymous_share',
+            properties: {
+              share_id: nextShare.shortId,
+              can_edit: true,
+              syntax_supported: nextShare.syntaxSupportStatus !== 'unsupported',
+              size_bytes: nextShare.sizeBytes,
+            },
+          });
+        }
 
         if (!editable && editSecret) {
           setStatusMessage('Edit key is invalid for this share. Opened in read-only mode.');

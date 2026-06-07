@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex } from '@/lib/with-md/convex-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
+import { captureFirstUseServerEvent } from '@/lib/with-md/first-use-server';
 import { canAccessRepoInInstallation } from '@/lib/with-md/github-access';
 import {
   fetchBlobContent,
@@ -128,6 +130,18 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      await captureFirstUseServerEvent({
+        event: FIRST_USE_EVENTS.repoSynced,
+        flow: 'github_workspace',
+        distinctId: session.userId,
+        properties: {
+          repo_id: repoId,
+          files_count: forceFiles.length,
+          sync_surface: 'github_force_sync',
+          active_branch: effectiveBranch,
+        },
+      });
+
       return NextResponse.json({
         repoId,
         filesCount: forceFiles.length,
@@ -202,6 +216,22 @@ export async function POST(req: NextRequest) {
         `(deleted ${missingResult.deletedCount ?? 0},`,
         `cancelled ${missingResult.cancelledQueueCount ?? 0} queued + ${missingResult.preservedLocalOnlyCount ?? 0} local-only).`,
       ].join(' '),
+    });
+
+    await captureFirstUseServerEvent({
+      event: FIRST_USE_EVENTS.repoSynced,
+      flow: 'github_workspace',
+      distinctId: session.userId,
+      properties: {
+        repo_id: repoId,
+        files_count: filesCount,
+        deleted_count: missingResult.deletedCount ?? 0,
+        cancelled_queue_count: missingResult.cancelledQueueCount ?? 0,
+        preserved_local_only_count: missingResult.preservedLocalOnlyCount ?? 0,
+        skipped_count: skippedPaths.length,
+        sync_surface: 'github_sync',
+        active_branch: effectiveBranch,
+      },
     });
 
     return NextResponse.json({

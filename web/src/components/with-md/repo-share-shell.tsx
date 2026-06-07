@@ -12,6 +12,8 @@ import NoticeStack from '@/components/with-md/notice-stack';
 import { proseMarkdownComponents } from '@/components/with-md/prose-markdown-components';
 import { useScrollbarWidth } from '@/hooks/with-md/use-scrollbar-width';
 import { cursorColorForUser } from '@/lib/with-md/cursor-colors';
+import { captureFirstUseClientEvent } from '@/lib/with-md/first-use-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
 
 interface SharePayload {
   mdFileId: string;
@@ -94,6 +96,7 @@ export default function RepoShareShell({ token }: Props) {
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [collabName, setCollabName] = useState('guest');
   const shareMenuRef = useRef<HTMLDivElement | null>(null);
+  const trackedEditOpenRef = useRef<string | null>(null);
   const { ref: sourceScrollRef, scrollbarWidth: sourceScrollbarWidth } = useScrollbarWidth<HTMLPreElement>();
   const { ref: markdownScrollRef, scrollbarWidth: markdownScrollbarWidth } = useScrollbarWidth<HTMLDivElement>();
 
@@ -141,6 +144,21 @@ export default function RepoShareShell({ token }: Props) {
         setShare(data.share);
         setCanEdit(Boolean(data.canEdit));
         setContent(data.share.content);
+
+        if (data.canEdit && editSecret && trackedEditOpenRef.current !== token) {
+          trackedEditOpenRef.current = token;
+          captureFirstUseClientEvent({
+            event: FIRST_USE_EVENTS.editLinkOpened,
+            flow: 'github_workspace',
+            properties: {
+              share_id: token,
+              md_file_id: data.share.mdFileId,
+              repo_id: data.share.repoId,
+              can_edit: true,
+              syntax_supported: data.share.syntaxSupportStatus !== 'unsupported',
+            },
+          });
+        }
 
         if (data.editRejected) {
           setStatusMessage('Edit key is invalid for this share. Opened in read-only mode.');

@@ -3,6 +3,8 @@ import { randomBytes, createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex } from '@/lib/with-md/convex-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
+import { captureFirstUseServerEvent } from '@/lib/with-md/first-use-server';
 
 const MAX_UPLOAD_BYTES = 1024 * 1024;
 const MAX_CREATES_PER_DAY_PER_IP = 20;
@@ -125,6 +127,18 @@ export async function POST(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const viewUrl = `${origin}/s/${encodeURIComponent(shareId)}`;
   const editUrl = `${viewUrl}?edit=${encodeURIComponent(editSecret)}`;
+
+  await captureFirstUseServerEvent({
+    event: FIRST_USE_EVENTS.shareCreated,
+    flow: 'anonymous_share',
+    distinctId: `anon:${ipHash}`,
+    properties: {
+      share_id: shareId,
+      size_bytes: sizeBytes,
+      has_initial_content: normalizedContent.trim().length > 0,
+      file_extension: fileName.toLowerCase().endsWith('.markdown') ? 'markdown' : 'md',
+    },
+  });
 
   return NextResponse.json({
     ok: true,

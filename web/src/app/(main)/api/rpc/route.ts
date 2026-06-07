@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex, queryConvex } from '@/lib/with-md/convex-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
+import { captureFirstUseServerEvent } from '@/lib/with-md/first-use-server';
 import { getSessionOrNull, type SessionData } from '@/lib/with-md/session';
 
 // Only expose the subset of functions the browser client actually uses.
@@ -290,6 +292,24 @@ export async function POST(request: NextRequest) {
       result = await queryConvex(body.fn, authorized.args);
     } else {
       result = await mutateConvex(body.fn, authorized.args);
+    }
+
+    if (
+      body.fn === F.mutations.mdFilesSaveSource
+      && result
+      && typeof result === 'object'
+      && (result as { changed?: unknown }).changed === true
+    ) {
+      await captureFirstUseServerEvent({
+        event: FIRST_USE_EVENTS.saveCompleted,
+        flow: 'github_workspace',
+        distinctId: session.userId,
+        properties: {
+          save_surface: 'workspace_source',
+          md_file_id: String(authorized.args.mdFileId ?? ''),
+          github_login_present: Boolean(session.githubLogin),
+        },
+      });
     }
 
     return NextResponse.json({ ok: true, result });

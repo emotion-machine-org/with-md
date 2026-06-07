@@ -51,6 +51,8 @@ const INLINE_REALTIME_MAX_BYTES = (() => {
 const OVERSIZE_REPORT_INTERVAL_MS = 15_000;
 const OVERSIZE_REPORT_DELTA_BYTES = 8 * 1024;
 const LOG_THROTTLE_MS = 10_000;
+const FIRST_USE_CAPTURE_TIMEOUT_MS = 1500;
+const FIRST_USE_SAVE_COMPLETED_EVENT = 'withmd_first_use_save_completed';
 const textEncoder = new TextEncoder();
 const lastLogAtByKey = new Map<string, number>();
 const oversizedReportByDoc = new Map<string, { bytes: number; reportedAt: number }>();
@@ -77,6 +79,67 @@ interface PersistNormalizationMetadata {
   normalized: boolean;
   repeats: number;
   strippedLeadingPlaceholders: boolean;
+}
+
+function envFlagEnabled(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function posthogConfig() {
+  const enabled = envFlagEnabled(process.env.POSTHOG_ENABLED)
+    || envFlagEnabled(process.env.NEXT_PUBLIC_POSTHOG_ENABLED);
+  const token = (process.env.POSTHOG_TOKEN ?? process.env.NEXT_PUBLIC_POSTHOG_TOKEN ?? '').trim();
+  const host = (process.env.POSTHOG_HOST ?? process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com').trim();
+  if (!enabled || !token) return null;
+  return { token, host: host.replace(/\/+$/, '') };
+}
+
+function firstUseFlowForDocument(documentName: string): 'anonymous_share' | 'github_workspace' {
+  return documentName.startsWith('share:') ? 'anonymous_share' : 'github_workspace';
+}
+
+function firstUseDistinctIdForDocument(documentName: string): string {
+  if (documentName.startsWith('share:')) {
+    return `anon:${documentName.slice('share:'.length)}`;
+  }
+  return `md-file:${documentName}`;
+}
+
+async function captureRealtimeSave(documentName: string, persistPath: string, markdownBytes: number, yjsBytes: number) {
+  if (persistPath !== 'normal') return;
+  const config = posthogConfig();
+  if (!config) return;
+
+  try {
+    const flow = firstUseFlowForDocument(documentName);
+    await fetch(`${config.host}/capture/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: config.token,
+        event: FIRST_USE_SAVE_COMPLETED_EVENT,
+        distinct_id: firstUseDistinctIdForDocument(documentName),
+        properties: {
+          flow,
+          product: 'with.md',
+          measurement_area: 'first_use',
+          save_surface: 'realtime_editor',
+          document_kind: flow === 'anonymous_share' ? 'anonymous_share' : 'workspace_file',
+          persist_path: persistPath,
+          size_bytes: markdownBytes,
+          yjs_bytes: yjsBytes,
+        },
+      }),
+      signal: AbortSignal.timeout(FIRST_USE_CAPTURE_TIMEOUT_MS),
+    });
+  } catch (error) {
+    console.warn(
+      '[with-md:first-use-analytics] realtime save capture failed',
+      error instanceof Error ? error.message : 'unknown error',
+    );
+  }
 }
 
 if (!CONVEX_HTTP || !INTERNAL_SECRET) {
@@ -901,6 +964,7 @@ const server = Server.configure({
       if (typeof response?.documentVersion === 'string') {
         loadedVersionByDoc.set(documentName, response.documentVersion);
       }
+      void captureRealtimeSave(documentName, persistPath, markdownBytes, persistedYjsBytes);
       const normalizedTag = payload.normalized
         ? ` normalized=true repeats=${payload.repeats} strippedPlaceholders=${payload.strippedLeadingPlaceholders ? 'true' : 'false'}`
         : '';

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex, queryConvex } from '@/lib/with-md/convex-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
+import { captureFirstUseServerEvent } from '@/lib/with-md/first-use-server';
 import { getSessionOrNull } from '@/lib/with-md/session';
 import {
   generateRepoShareEditSecret,
@@ -93,6 +95,18 @@ export async function POST(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const viewUrl = repoShareViewUrl(origin, shortId);
   const editUrl = repoShareEditUrl(origin, shortId, editSecret);
+
+  await captureFirstUseServerEvent({
+    event: FIRST_USE_EVENTS.shareCreated,
+    flow: 'github_workspace',
+    distinctId: session.userId,
+    properties: {
+      share_id: shortId,
+      md_file_id: mdFileId,
+      repo_id: file.repoId,
+      share_surface: 'workspace_file',
+    },
+  });
 
   return NextResponse.json({
     ok: true,

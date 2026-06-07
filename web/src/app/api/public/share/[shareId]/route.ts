@@ -15,6 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex, queryConvex } from '@/lib/with-md/convex-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
+import { captureFirstUseServerEvent } from '@/lib/with-md/first-use-server';
 import { generateClientId, checkRateLimit, MAX_REQUESTS_PER_WINDOW } from '@/lib/with-md/rate-limit';
 import {
   MAX_PUBLIC_SHARE_BYTES,
@@ -236,6 +238,18 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
   const origin = request.nextUrl.origin;
   const shareUrl = `${origin}/s/${encodeURIComponent(shortId)}`;
+
+  await captureFirstUseServerEvent({
+    event: FIRST_USE_EVENTS.saveCompleted,
+    flow: 'anonymous_share',
+    distinctId: `anon:${shortId}`,
+    properties: {
+      share_id: shortId,
+      save_surface: 'public_share_api',
+      size_bytes: sizeBytes,
+      optimistic_match_used: Boolean(expectedContentHash),
+    },
+  });
 
   return NextResponse.json(
     {
