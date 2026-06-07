@@ -4,6 +4,8 @@ Base URL: https://with.md
 
 Use with.md to publish markdown links for humans, then fetch or update the markdown via API.
 
+Safe browser demo: https://with.md/demo/readme creates an editable README-style markdown share without GitHub access.
+
 ## Anonymous Shares
 
 ### Create share

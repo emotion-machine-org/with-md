@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import Link from 'next/link';
 
 import { useAuth } from '@/hooks/with-md/use-auth';
+import { README_DEMO_FILE_NAME, README_DEMO_MARKDOWN } from '@/lib/with-md/readme-demo';
 
 const LANDING_SYNC_WORDS = ['instant', 'real-time'] as const;
 const LANDING_SYNC_HOLD_MS = 2400;
@@ -77,6 +78,34 @@ export default function Home() {
   const [skillCopied, setSkillCopied] = useState(false);
   const [webTargetInput, setWebTargetInput] = useState('');
   const [webTargetError, setWebTargetError] = useState<string | null>(null);
+
+  const openReadmeDemo = useCallback(async () => {
+    if (anonBusy) return;
+    setAnonBusy(true);
+    setAnonMessage(null);
+    try {
+      const response = await fetch('/api/anon-share/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: README_DEMO_FILE_NAME,
+          content: README_DEMO_MARKDOWN,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { editUrl?: string; error?: string }
+        | null;
+      if (!response.ok || !data?.editUrl) {
+        setAnonMessage(data?.error ?? 'Could not open the demo.');
+        return;
+      }
+      window.location.href = data.editUrl;
+    } catch (error) {
+      setAnonMessage(error instanceof Error ? error.message : 'Could not open the demo.');
+    } finally {
+      setAnonBusy(false);
+    }
+  }, [anonBusy]);
 
   const createBlankMarkdown = useCallback(async () => {
     if (anonBusy) return;
@@ -306,6 +335,15 @@ export default function Home() {
                       onClick={createBlankMarkdown}
                     >
                       create a new file
+                    </button>
+                    . Developers can also{' '}
+                    <button
+                      type="button"
+                      className="withmd-landing-demo-link"
+                      disabled={anonBusy}
+                      onClick={() => void openReadmeDemo()}
+                    >
+                      open an editable README demo
                     </button>
                     .
                   </p>

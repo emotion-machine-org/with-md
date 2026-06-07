@@ -4,6 +4,8 @@ with.md gives markdown-heavy teams a GitHub-backed collaboration workspace for l
 
 Filesystem-first markdown collaboration for humans and agents. Edit markdown files stored in GitHub repositories with real-time collaboration, live cursors, anchored comments, and instant synchronization, no proprietary formats, no lock-in.
 
+Try it without connecting a repo: [open an editable README demo](https://with.md/demo/readme).
+
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
