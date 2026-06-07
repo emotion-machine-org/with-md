@@ -5,7 +5,7 @@ import { siteUrl } from '@/lib/with-md/site';
 
 const enablePrivateFonts = process.env.WITHMD_ENABLE_PRIVATE_FONTS === '1';
 const privateFontsStylesheetUrl = process.env.WITHMD_PRIVATE_FONTS_STYLESHEET_URL?.trim() || '/private-fonts.css';
-const siteTitle = 'with.md - Markdown collaboration for developers and agents';
+const siteTitle = 'GitHub markdown collaboration for developers | with.md';
 const siteDescription = 'Share anonymous markdown links and collaborate on GitHub-backed docs with developers and agents.';
 
 export const metadata: Metadata = {
