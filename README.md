@@ -399,6 +399,8 @@ The app will be available at `http://localhost:4040`.
 
 Canonical API reference: [`docs/share-api.md`](docs/share-api.md)
 
+Workflow examples: [`docs/agent-workflow-examples.md`](docs/agent-workflow-examples.md)
+
 Machine-readable discovery: [`/llms.txt`](https://with.md/llms.txt)
 
 Skill install prompt for coding agents:
