@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import Link from 'next/link';
 
 import { useAuth } from '@/hooks/with-md/use-auth';
+import {
+  FIRST_USE_ENTRY_SOURCES,
+  normalizeFirstUseEntrySource,
+  type FirstUseEntrySource,
+} from '@/lib/with-md/first-use-events';
 
 const LANDING_SYNC_WORDS = ['instant', 'real-time'] as const;
 const LANDING_SYNC_HOLD_MS = 2400;
@@ -68,6 +73,7 @@ function buildWebTargetRoutePath(normalizedUrl: string): string {
 export default function Home() {
   const { loading, user, login } = useAuth();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const entrySourceOverrideRef = useRef<FirstUseEntrySource | null>(null);
   const [anonBusy, setAnonBusy] = useState(false);
   const [anonMessage, setAnonMessage] = useState<string | null>(null);
   const [landingDropActive, setLandingDropActive] = useState(false);
@@ -77,6 +83,15 @@ export default function Home() {
   const [skillCopied, setSkillCopied] = useState(false);
   const [webTargetInput, setWebTargetInput] = useState('');
   const [webTargetError, setWebTargetError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const entrySource = normalizeFirstUseEntrySource(
+      new URLSearchParams(window.location.search).get('entry_source'),
+    );
+    entrySourceOverrideRef.current = entrySource === FIRST_USE_ENTRY_SOURCES.sharedPageCreateOwn
+      ? entrySource
+      : null;
+  }, []);
 
   const createBlankMarkdown = useCallback(async () => {
     if (anonBusy) return;
@@ -89,6 +104,7 @@ export default function Home() {
         body: JSON.stringify({
           fileName: 'untitled.md',
           content: '\n',
+          entrySource: entrySourceOverrideRef.current ?? FIRST_USE_ENTRY_SOURCES.homepageBlank,
         }),
       });
       const data = (await response.json().catch(() => null)) as
@@ -122,6 +138,7 @@ export default function Home() {
         body: JSON.stringify({
           fileName: file.name,
           content,
+          entrySource: entrySourceOverrideRef.current ?? FIRST_USE_ENTRY_SOURCES.homepageUpload,
         }),
       });
       const data = (await response.json().catch(() => null)) as

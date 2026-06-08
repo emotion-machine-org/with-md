@@ -3,7 +3,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex } from '@/lib/with-md/convex-client';
-import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
+import { FIRST_USE_EVENTS, normalizeFirstUseEntrySource } from '@/lib/with-md/first-use-events';
 import { captureFirstUseServerEvent } from '@/lib/with-md/first-use-server';
 
 const MAX_UPLOAD_BYTES = 1024 * 1024;
@@ -57,7 +57,7 @@ function generateEditSecret(): string {
 
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as
-    | { fileName?: string; content?: string }
+    | { fileName?: string; content?: string; entrySource?: unknown }
     | null;
   const fileName = sanitizeFileName(body?.fileName ?? 'shared.md');
   if (!isMarkdownFileName(fileName)) {
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
   }
 
   const normalizedContent = body.content.replace(/\r\n/g, '\n');
+  const entrySource = normalizeFirstUseEntrySource(body.entrySource);
   const sizeBytes = markdownByteLength(normalizedContent);
   if (sizeBytes <= 0) {
     return NextResponse.json({ error: 'Markdown content is empty.' }, { status: 400 });
@@ -137,6 +138,7 @@ export async function POST(request: NextRequest) {
       size_bytes: sizeBytes,
       has_initial_content: normalizedContent.trim().length > 0,
       file_extension: fileName.toLowerCase().endsWith('.markdown') ? 'markdown' : 'md',
+      entry_source: entrySource ?? undefined,
     },
   });
 

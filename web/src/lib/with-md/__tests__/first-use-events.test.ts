@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { FIRST_USE_EVENTS, sanitizeFirstUseProperties } from '../first-use-events';
+import {
+  FIRST_USE_ENTRY_SOURCES,
+  FIRST_USE_EVENTS,
+  normalizeFirstUseEntrySource,
+  sanitizeFirstUseProperties,
+} from '../first-use-events';
 
 describe('first-use analytics events', () => {
   it('keeps the named first-use events stable', () => {
@@ -33,5 +38,23 @@ describe('first-use analytics events', () => {
       changed: true,
       nullish: null,
     });
+  });
+
+  it('keeps the named first-use entry sources stable', () => {
+    expect(FIRST_USE_ENTRY_SOURCES).toEqual({
+      homepageDemo: 'homepage_demo',
+      homepageUpload: 'homepage_upload',
+      homepageBlank: 'homepage_blank',
+      sharedPageCreateOwn: 'shared_page_create_own',
+    });
+  });
+
+  it('normalizes only the approved first-use entry source labels', () => {
+    expect(normalizeFirstUseEntrySource('homepage_demo')).toBe('homepage_demo');
+    expect(normalizeFirstUseEntrySource('homepage_upload')).toBe('homepage_upload');
+    expect(normalizeFirstUseEntrySource('homepage_blank')).toBe('homepage_blank');
+    expect(normalizeFirstUseEntrySource('shared_page_create_own')).toBe('shared_page_create_own');
+    expect(normalizeFirstUseEntrySource('public_api')).toBeNull();
+    expect(normalizeFirstUseEntrySource(' homepage_upload ')).toBe('homepage_upload');
   });
 });
