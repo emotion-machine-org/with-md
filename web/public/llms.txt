@@ -4,6 +4,12 @@ Base URL: https://with.md
 
 Use with.md to publish markdown links for humans, then fetch or update the markdown via API.
 
+## Links
+
+- [with.md home](https://with.md/)
+- [Skill install prompt](https://with.md/skill)
+- [Canonical SKILL.md](https://with.md/skill/md)
+
 ## Anonymous Shares
 
 ### Create share
