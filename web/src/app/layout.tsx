@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 
 import '@/app/globals.css';
 import { siteUrl } from '@/lib/with-md/site';
 
 const enablePrivateFonts = process.env.WITHMD_ENABLE_PRIVATE_FONTS === '1';
 const privateFontsStylesheetUrl = process.env.WITHMD_PRIVATE_FONTS_STYLESHEET_URL?.trim() || '/private-fonts.css';
+const configuredGoogleAnalyticsId = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID?.trim() || 'G-YZB6FGJP9F';
+const googleAnalyticsMeasurementId = /^G-[A-Z0-9]+$/.test(configuredGoogleAnalyticsId) ? configuredGoogleAnalyticsId : '';
 const siteTitle = 'with.md - Markdown collaboration for developers and agents';
 const siteDescription = 'Share anonymous markdown links and collaborate on GitHub-backed docs with developers and agents.';
 
@@ -45,7 +48,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {googleAnalyticsMeasurementId ? (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(googleAnalyticsMeasurementId)}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${googleAnalyticsMeasurementId}');
+              `}
+            </Script>
+          </>
+        ) : null}
+        {children}
+      </body>
     </html>
   );
 }
