@@ -3,6 +3,15 @@ import { randomBytes, createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex } from '@/lib/with-md/convex-client';
+import { captureShareEvent } from '@/lib/with-md/share-analytics-server';
+import {
+  fileExtensionForShareEvent,
+  SHARE_EVENTS,
+  sourceChannelFromPath,
+  sourcePathFromReferer,
+  sourceShareIdFromPath,
+  type ShareEntrySurface,
+} from '@/lib/with-md/share-events';
 
 const MAX_UPLOAD_BYTES = 1024 * 1024;
 const MAX_CREATES_PER_DAY_PER_IP = 20;
@@ -55,7 +64,7 @@ function generateEditSecret(): string {
 
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as
-    | { fileName?: string; content?: string }
+    | { fileName?: string; content?: string; entrySurface?: string; sourcePath?: string; sourceShareId?: string }
     | null;
   const fileName = sanitizeFileName(body?.fileName ?? 'shared.md');
   if (!isMarkdownFileName(fileName)) {
@@ -125,6 +134,31 @@ export async function POST(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const viewUrl = `${origin}/s/${encodeURIComponent(shareId)}`;
   const editUrl = `${viewUrl}?edit=${encodeURIComponent(editSecret)}`;
+  const refererPath = sourcePathFromReferer(request.headers.get('referer'));
+  const sourcePath = body?.sourcePath?.trim() || refererPath || '/';
+  const sourceShareId = body?.sourceShareId?.trim() || sourceShareIdFromPath(sourcePath);
+  const entrySurface: ShareEntrySurface = sourceShareId
+    ? 'shared_page'
+    : body?.entrySurface === 'home_blank'
+      ? 'home_blank'
+      : body?.entrySurface === 'home_drop'
+        ? 'home_drop'
+        : 'home_upload';
+  const shareEventProperties = {
+    entry_surface: entrySurface,
+    source_path: sourcePath,
+    source_channel: sourceChannelFromPath(sourcePath),
+    share_id: shareId,
+    ...(sourceShareId ? { source_share_id: sourceShareId } : {}),
+    file_extension: fileExtensionForShareEvent(fileName),
+    size_bytes: sizeBytes,
+    created_via: 'browser' as const,
+  };
+
+  await captureShareEvent(SHARE_EVENTS.anonymousShareCreated, ipHash, shareEventProperties);
+  if (sourceShareId) {
+    await captureShareEvent(SHARE_EVENTS.recipientCreatedOwnShare, ipHash, shareEventProperties);
+  }
 
   return NextResponse.json({
     ok: true,

@@ -20,6 +20,8 @@ import {
   ShareVersionConflictError,
   type PublicShareSnapshot,
 } from '@/lib/with-md/public-share-save';
+import { captureShareEvent } from '@/lib/with-md/share-analytics-client';
+import { SHARE_EVENTS, sourceChannelFromPath } from '@/lib/with-md/share-events';
 import { detectUnsupportedSyntax } from '@/lib/with-md/syntax';
 
 interface SharePayload {
@@ -120,6 +122,7 @@ export default function AnonShareShell({ shareId }: Props) {
   const [editorHydrationSlow, setEditorHydrationSlow] = useState(false);
   const shareMenuRef = useRef<HTMLDivElement | null>(null);
   const shareRef = useRef<SharePayload | null>(null);
+  const viewTrackedRef = useRef<string | null>(null);
   const lastSourceSaveRef = useRef('');
   const { ref: sourceScrollRef, scrollbarWidth: sourceScrollbarWidth } = useScrollbarWidth<HTMLPreElement>();
   const { ref: markdownScrollRef, scrollbarWidth: markdownScrollbarWidth } = useScrollbarWidth<HTMLDivElement>();
@@ -216,6 +219,19 @@ export default function AnonShareShell({ shareId }: Props) {
     shareRef.current = share;
   }, [share]);
 
+  useEffect(() => {
+    if (!share || viewTrackedRef.current === share.shortId) return;
+    viewTrackedRef.current = share.shortId;
+    const sourcePath = window.location.pathname || `/s/${share.shortId}`;
+    void captureShareEvent(SHARE_EVENTS.sharedPageViewed, {
+      entry_surface: 'shared_page',
+      source_path: sourcePath,
+      source_channel: sourceChannelFromPath(sourcePath),
+      share_id: share.shortId,
+      can_edit: canEdit,
+    });
+  }, [canEdit, share]);
+
   const viewUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
     return `${window.location.origin}/s/${encodeURIComponent(shareId)}`;
@@ -275,46 +291,79 @@ export default function AnonShareShell({ shareId }: Props) {
     if (!viewUrl) return;
     try {
       await navigator.clipboard.writeText(viewUrl);
+      void captureShareEvent(SHARE_EVENTS.shareLinkCopied, {
+        entry_surface: 'shared_page',
+        source_path: window.location.pathname || `/s/${shareId}`,
+        source_channel: 'recipient_loop',
+        share_id: shareId,
+        link_type: 'view',
+        can_edit: canEdit,
+      });
       setStatusMessage('View link copied.');
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Could not copy view link.');
     } finally {
       setShareMenuOpen(false);
     }
-  }, [viewUrl]);
+  }, [canEdit, shareId, viewUrl]);
 
   const onCopyEditLink = useCallback(async () => {
     if (!editUrl) return;
     try {
       await navigator.clipboard.writeText(editUrl);
+      void captureShareEvent(SHARE_EVENTS.shareLinkCopied, {
+        entry_surface: 'shared_page',
+        source_path: window.location.pathname || `/s/${shareId}`,
+        source_channel: 'recipient_loop',
+        share_id: shareId,
+        link_type: 'edit',
+        can_edit: canEdit,
+      });
       setStatusMessage('Edit link copied.');
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Could not copy edit link.');
     } finally {
       setShareMenuOpen(false);
     }
-  }, [editUrl]);
+  }, [canEdit, editUrl, shareId]);
 
   const onCopyMarkdownUrl = useCallback(async () => {
     if (!markdownUrl) return;
     try {
       await navigator.clipboard.writeText(markdownUrl);
+      void captureShareEvent(SHARE_EVENTS.shareLinkCopied, {
+        entry_surface: 'shared_page',
+        source_path: window.location.pathname || `/s/${shareId}`,
+        source_channel: 'recipient_loop',
+        share_id: shareId,
+        link_type: 'raw',
+        can_edit: canEdit,
+      });
       setStatusMessage('Raw URL copied.');
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Could not copy raw URL.');
     } finally {
       setShareMenuOpen(false);
     }
-  }, [markdownUrl]);
+  }, [canEdit, markdownUrl, shareId]);
 
   const onCopyMarkdown = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(content);
+      void captureShareEvent(SHARE_EVENTS.shareLinkCopied, {
+        entry_surface: 'shared_page',
+        source_path: window.location.pathname || `/s/${shareId}`,
+        source_channel: 'recipient_loop',
+        share_id: shareId,
+        link_type: 'markdown_text',
+        can_edit: canEdit,
+        size_bytes: share?.sizeBytes,
+      });
       setStatusMessage('Markdown copied.');
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Could not copy markdown.');
     }
-  }, [content]);
+  }, [canEdit, content, share?.sizeBytes, shareId]);
 
   const onDownload = useCallback(() => {
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
