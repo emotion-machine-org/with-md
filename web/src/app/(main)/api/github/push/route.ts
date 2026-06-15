@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex, queryConvex } from '@/lib/with-md/convex-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
+import { captureFirstUseServerEvent } from '@/lib/with-md/first-use-server';
 import { canAccessRepoInInstallation } from '@/lib/with-md/github-access';
 import { createCommitWithFiles, fetchMdTree, getInstallationToken, getRepoInstallationId } from '@/lib/with-md/github';
 import { getSessionOrNull } from '@/lib/with-md/session';
@@ -173,6 +175,20 @@ export async function POST(req: NextRequest) {
       actorId: session.githubLogin,
       type: 'push_completed',
       summary: pushSummary,
+    });
+
+    await captureFirstUseServerEvent({
+      event: FIRST_USE_EVENTS.pushBackCompleted,
+      flow: 'github_workspace',
+      distinctId: session.userId,
+      properties: {
+        repo_id: body.repoId,
+        files_count: files.length,
+        updates_count: updates.length,
+        deletions_count: deletions.length,
+        branch: effectiveBranch,
+        pushed: files.length > 0,
+      },
     });
 
     return NextResponse.json({ pushed: files.length, commitSha });

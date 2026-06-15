@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex, queryConvex } from '@/lib/with-md/convex-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
+import { captureFirstUseServerEvent } from '@/lib/with-md/first-use-server';
 import {
   MAX_PUBLIC_SHARE_BYTES,
   markdownByteLength,
@@ -203,6 +205,19 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
   const origin = request.nextUrl.origin;
   const viewUrl = repoShareViewUrl(origin, shortId);
+
+  await captureFirstUseServerEvent({
+    event: FIRST_USE_EVENTS.saveCompleted,
+    flow: 'github_workspace',
+    distinctId: `repo-share:${shortId}`,
+    properties: {
+      share_id: shortId,
+      md_file_id: result.mdFileId ?? null,
+      save_surface: 'repo_share_api',
+      size_bytes: sizeBytes,
+      optimistic_match_used: Boolean(expectedContentHash),
+    },
+  });
 
   return NextResponse.json(
     {

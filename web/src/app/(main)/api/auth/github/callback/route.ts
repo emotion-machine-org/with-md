@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { F, mutateConvex } from '@/lib/with-md/convex-client';
+import { FIRST_USE_EVENTS } from '@/lib/with-md/first-use-events';
+import { captureFirstUseServerEvent } from '@/lib/with-md/first-use-server';
 import { getSession } from '@/lib/with-md/session';
 
 export async function GET(req: NextRequest) {
@@ -77,6 +79,17 @@ export async function GET(req: NextRequest) {
   session.githubToken = tokenData.access_token;
   session.avatarUrl = ghUser.avatar_url;
   await session.save();
+
+  await captureFirstUseServerEvent({
+    event: FIRST_USE_EVENTS.githubConnected,
+    flow: 'github_workspace',
+    distinctId: userId,
+    properties: {
+      github_user_id: ghUser.id,
+      github_login_present: Boolean(ghUser.login),
+      auth_surface: state.endsWith(':popup') ? 'popup' : 'redirect',
+    },
+  });
 
   // Check if this was a popup OAuth flow (state ends with ":popup")
   const isPopup = state.endsWith(':popup');
