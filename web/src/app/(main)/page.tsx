@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import Link from 'next/link';
 
 import { useAuth } from '@/hooks/with-md/use-auth';
+import { bucketFileSize, captureWithMdCoreAction, fileExtensionFromName } from '@/lib/with-md/posthog';
 
 const LANDING_SYNC_WORDS = ['instant', 'real-time'] as const;
 const LANDING_SYNC_HOLD_MS = 2400;
@@ -98,6 +99,13 @@ export default function Home() {
         setAnonMessage(data?.error ?? 'Could not create share link.');
         return;
       }
+      captureWithMdCoreAction('withmd_anonymous_share_created', {
+        surface: 'anon_share',
+        entrypoint: 'blank',
+        file_extension: 'md',
+        has_initial_content: false,
+        file_size_bucket: 'lt_1kb',
+      });
       window.location.href = data.editUrl;
     } catch (error) {
       setAnonMessage(error instanceof Error ? error.message : 'Could not create share link.');
@@ -131,6 +139,13 @@ export default function Home() {
         setAnonMessage(data?.error ?? 'Could not create share link.');
         return;
       }
+      captureWithMdCoreAction('withmd_anonymous_share_created', {
+        surface: 'anon_share',
+        entrypoint: 'upload',
+        file_extension: fileExtensionFromName(file.name),
+        has_initial_content: content.trim().length > 0,
+        file_size_bucket: bucketFileSize(file.size),
+      });
       window.location.href = data.editUrl;
     } catch (error) {
       setAnonMessage(error instanceof Error ? error.message : 'Could not create share link.');

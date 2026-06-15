@@ -10,6 +10,7 @@ import NoticeStack from '@/components/with-md/notice-stack';
 import type { Notice } from '@/components/with-md/notice-stack';
 import { proseMarkdownComponents } from '@/components/with-md/prose-markdown-components';
 import { useScrollbarWidth } from '@/hooks/with-md/use-scrollbar-width';
+import { captureWithMdCoreAction } from '@/lib/with-md/posthog';
 
 interface Props {
   targetUrl: string;
@@ -117,6 +118,15 @@ export default function WebPageShell({ targetUrl, initialMode, initialTrigger }:
         throw new Error(data?.error ?? `Failed to resolve URL (${response.status}).`);
       }
 
+      captureWithMdCoreAction('withmd_website_to_markdown', {
+        surface: 'web_import',
+        resolve_mode: mode,
+        trigger: trigger ?? 'load',
+        source_engine: data.snapshot.sourceEngine,
+        from_cache: Boolean(data.fromCache),
+        is_stale: data.snapshot.isStale,
+        http_status: data.snapshot.httpStatus ?? 0,
+      });
       setSnapshot(data.snapshot);
       setFromCache(Boolean(data.fromCache));
       if (data.warning) {

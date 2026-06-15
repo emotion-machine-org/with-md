@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react';
 import type { BranchInfo } from '@/lib/with-md/github';
 import type { RepoInfo } from '@/lib/with-md/github';
 import { handleGitHubResponse } from '@/lib/with-md/github-fetch';
+import { captureWithMdCoreAction } from '@/lib/with-md/posthog';
 
 interface Props {
   onSelect: (result: { repoId: string; owner: string; name: string }) => void;
@@ -154,6 +155,11 @@ export default function RepoPicker({ onSelect }: Props) {
         }
 
         const data = (await res.json()) as { repoId: string };
+        captureWithMdCoreAction('withmd_repository_connected', {
+          surface: 'workspace',
+          repo_source: 'github',
+          branch_kind: activeBranch ? 'custom' : 'default',
+        });
         onSelect({ repoId: data.repoId, owner: repo.owner, name: repo.name });
       } catch (err) {
         if (!mountedRef.current) return;

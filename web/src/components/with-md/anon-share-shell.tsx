@@ -15,6 +15,7 @@ import { useScrollbarWidth } from '@/hooks/with-md/use-scrollbar-width';
 import { cursorColorForUser } from '@/lib/with-md/cursor-colors';
 import { protectMarkdownSave, type ProtectedMarkdownLoss } from '@/lib/with-md/markdown-format-guard';
 import { hasMeaningfulDiff } from '@/lib/with-md/markdown-diff';
+import { captureWithMdCoreActionOnce, fileExtensionFromName } from '@/lib/with-md/posthog';
 import {
   savePublicShareContent,
   ShareVersionConflictError,
@@ -331,10 +332,27 @@ export default function AnonShareShell({ shareId }: Props) {
     [anonName],
   );
 
+  const trackAnonShareEdit = useCallback((editorMode: 'source' | 'document', nextContent: string) => {
+    if (!share) return;
+    if (!hasMeaningfulDiff(nextContent, content)) return;
+    captureWithMdCoreActionOnce(`anon-edit:${share.shortId}`, 'withmd_document_edited', {
+      surface: 'anon_share',
+      editor_mode: editorMode,
+      file_extension: fileExtensionFromName(share.title || 'shared.md'),
+      repo_connected: false,
+    });
+  }, [content, share]);
+
   const onEditorContentChange = useCallback((nextContent: string) => {
+    trackAnonShareEdit('document', nextContent);
     setContent(nextContent);
     setSourceDraft(nextContent);
-  }, []);
+  }, [trackAnonShareEdit]);
+
+  const onSourceDraftChange = useCallback((nextContent: string) => {
+    trackAnonShareEdit('source', nextContent);
+    setSourceDraft(nextContent);
+  }, [trackAnonShareEdit]);
 
   const applyShareSnapshot = useCallback((
     snapshot: PublicShareSnapshot,
@@ -696,7 +714,7 @@ export default function AnonShareShell({ shareId }: Props) {
                   {canEdit ? (
                     <SourceEditor
                       value={sourceDraft}
-                      onChange={setSourceDraft}
+                      onChange={onSourceDraftChange}
                     />
                   ) : (
                     <pre
