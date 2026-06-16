@@ -4,6 +4,13 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import Link from 'next/link';
 
 import { useAuth } from '@/hooks/with-md/use-auth';
+import { captureShareEvent } from '@/lib/with-md/share-analytics-client';
+import {
+  fileExtensionForShareEvent,
+  SHARE_EVENTS,
+  sourceChannelFromPath,
+  type ShareEntrySurface,
+} from '@/lib/with-md/share-events';
 
 const LANDING_SYNC_WORDS = ['instant', 'real-time'] as const;
 const LANDING_SYNC_HOLD_MS = 2400;
@@ -82,6 +89,15 @@ export default function Home() {
     if (anonBusy) return;
     setAnonBusy(true);
     setAnonMessage(null);
+    const sourcePath = window.location.pathname || '/';
+    void captureShareEvent(SHARE_EVENTS.anonymousShareStarted, {
+      entry_surface: 'home_blank',
+      source_path: sourcePath,
+      source_channel: sourceChannelFromPath(sourcePath),
+      file_extension: 'md',
+      size_bytes: 1,
+      status: 'started',
+    });
     try {
       const response = await fetch('/api/anon-share/create', {
         method: 'POST',
@@ -89,6 +105,8 @@ export default function Home() {
         body: JSON.stringify({
           fileName: 'untitled.md',
           content: '\n',
+          entrySurface: 'home_blank',
+          sourcePath,
         }),
       });
       const data = (await response.json().catch(() => null)) as
@@ -106,7 +124,7 @@ export default function Home() {
     }
   }, [anonBusy]);
 
-  const uploadAnonymousMarkdown = useCallback(async (file: File) => {
+  const uploadAnonymousMarkdown = useCallback(async (file: File, entrySurface: ShareEntrySurface = 'home_upload') => {
     if (!isMarkdownName(file.name)) {
       setAnonMessage('Only .md and .markdown files are supported.');
       return;
@@ -114,6 +132,15 @@ export default function Home() {
 
     setAnonBusy(true);
     setAnonMessage(null);
+    const sourcePath = window.location.pathname || '/';
+    void captureShareEvent(SHARE_EVENTS.anonymousShareStarted, {
+      entry_surface: entrySurface,
+      source_path: sourcePath,
+      source_channel: sourceChannelFromPath(sourcePath),
+      file_extension: fileExtensionForShareEvent(file.name),
+      size_bytes: file.size,
+      status: 'started',
+    });
     try {
       const content = await file.text();
       const response = await fetch('/api/anon-share/create', {
@@ -122,6 +149,8 @@ export default function Home() {
         body: JSON.stringify({
           fileName: file.name,
           content,
+          entrySurface,
+          sourcePath,
         }),
       });
       const data = (await response.json().catch(() => null)) as
@@ -213,7 +242,7 @@ export default function Home() {
       if (anonBusy) return;
       const file = event.dataTransfer?.files?.[0];
       if (!file) return;
-      void uploadAnonymousMarkdown(file);
+      void uploadAnonymousMarkdown(file, 'home_drop');
     };
 
     window.addEventListener('dragenter', onDragEnter);

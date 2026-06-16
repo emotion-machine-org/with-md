@@ -24,6 +24,7 @@
 import { randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { F, mutateConvex } from '@/lib/with-md/convex-client';
+import { captureShareEvent } from '@/lib/with-md/share-analytics-server';
 import {
   generateClientId,
   checkRateLimit,
@@ -35,6 +36,13 @@ import {
   markdownByteLength,
   normalizeMarkdownInput,
 } from '@/lib/with-md/public-share-api';
+import {
+  fileExtensionForShareEvent,
+  SHARE_EVENTS,
+  sourceChannelFromPath,
+  sourcePathFromReferer,
+  sourceShareIdFromPath,
+} from '@/lib/with-md/share-events';
 
 function sanitizeFileName(input: string): string {
   const trimmed = input.trim();
@@ -155,6 +163,24 @@ export async function POST(request: NextRequest) {
   const viewUrl = `${origin}/s/${encodeURIComponent(shareId)}`;
   const rawUrl = `${viewUrl}/raw`;
   const editUrl = `${viewUrl}?edit=${encodeURIComponent(editSecret)}`;
+  const refererPath = sourcePathFromReferer(request.headers.get('referer'));
+  const sourcePath = refererPath ?? '/api/public/share/create';
+  const sourceShareId = sourceShareIdFromPath(sourcePath);
+  const shareEventProperties = {
+    entry_surface: sourceShareId ? 'shared_page' as const : 'public_api' as const,
+    source_path: sourcePath,
+    source_channel: sourceChannelFromPath(sourcePath),
+    share_id: shareId,
+    ...(sourceShareId ? { source_share_id: sourceShareId } : {}),
+    file_extension: fileExtensionForShareEvent(filename),
+    size_bytes: sizeBytes,
+    created_via: 'public_api' as const,
+  };
+
+  await captureShareEvent(SHARE_EVENTS.anonymousShareCreated, clientId, shareEventProperties);
+  if (sourceShareId) {
+    await captureShareEvent(SHARE_EVENTS.recipientCreatedOwnShare, clientId, shareEventProperties);
+  }
 
   return NextResponse.json({
     ok: true,
