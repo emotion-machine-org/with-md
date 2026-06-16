@@ -402,8 +402,13 @@ export default function WithMdShell({ repoId, filePath }: Props) {
     const persisted = currentFile?.syntaxSupportReasons ?? [];
     return Array.from(new Set([...persisted, ...localSyntax.reasons]));
   }, [currentFile?.syntaxSupportReasons, localSyntax.reasons]);
+  // Trust live local detection (same logic as the backend) when content is loaded,
+  // so files persisted as `unsupported` under an older ruleset — e.g. frontmatter,
+  // now richly editable — become editable without a Convex backfill. Fall back to
+  // the persisted status only when content isn't available yet.
   const syntaxSupported = currentFile
-    ? currentFile.syntaxSupportStatus !== 'unsupported' && localSyntax.supported
+    ? localSyntax.supported &&
+      (currentFile.content ? true : currentFile.syntaxSupportStatus !== 'unsupported')
     : true;
   const { userMode, setUserMode, canUseRichEdit } = useDocMode(syntaxSupported);
   const sourceDirty = Boolean(currentFile && hasMeaningfulDiff(sourceValue, currentFile.content));

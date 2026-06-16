@@ -1,6 +1,5 @@
 import type { SyntaxSupportResult } from '@/lib/with-md/types';
 
-const FRONTMATTER_RE = /^---\n[\s\S]*?\n---\n/;
 const DIRECTIVE_RE = /^:{2,}\w+/m;
 const FENCED_CODE_RE = /(^|\n)(```|~~~)[^\n]*\n[\s\S]*?\n\2(?=\n|$)/g;
 const INLINE_CODE_RE = /`[^`\n]+`/g;
@@ -18,7 +17,6 @@ export function detectUnsupportedSyntax(markdown: string): SyntaxSupportResult {
   const reasons: string[] = [];
   const sanitized = stripCodeSegments(markdown);
 
-  if (FRONTMATTER_RE.test(markdown)) reasons.push('frontmatter');
   if (DIRECTIVE_RE.test(markdown)) reasons.push('directives');
   if (REFERENCE_IMAGE_RE.test(sanitized)) {
     reasons.push('images');

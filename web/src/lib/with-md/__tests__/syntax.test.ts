@@ -83,11 +83,18 @@ describe('detectUnsupportedSyntax', () => {
     expect(result.reasons).toContain('mdx_or_embedded_jsx');
   });
 
-  it('flags frontmatter and directives', () => {
+  it('flags directives but no longer flags frontmatter', () => {
     const md = `---\ntitle: x\n---\n\n:::warning\ntext\n:::`;
     const result = detectUnsupportedSyntax(md);
     expect(result.supported).toBe(false);
-    expect(result.reasons).toContain('frontmatter');
+    expect(result.reasons).not.toContain('frontmatter');
     expect(result.reasons).toContain('directives');
+  });
+
+  it('treats a frontmatter-only document as supported', () => {
+    const md = `---\ntitle: x\ntags: [a, b]\n---\n\n# Body\n\nNormal text.`;
+    const result = detectUnsupportedSyntax(md);
+    expect(result.supported).toBe(true);
+    expect(result.reasons).toHaveLength(0);
   });
 });
