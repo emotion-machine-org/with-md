@@ -21,6 +21,7 @@ import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 import { CommentMark } from '@/components/with-md/tiptap/comment-mark';
+import { FrontmatterBlock } from '@/components/with-md/tiptap/frontmatter-block';
 import { InlineImage } from '@/components/with-md/tiptap/inline-image';
 import { MermaidBlock } from '@/components/with-md/tiptap/mermaid-block';
 import { TableBlock } from '@/components/with-md/tiptap/table-block';
@@ -86,6 +87,9 @@ export function buildEditorExtensions(params: {
   });
 
   const baseCore = [
+    // FrontmatterBlock registers a custom tokenizer for the leading `---` YAML
+    // block and must come before StarterKit so it claims that block first.
+    FrontmatterBlock,
     // MermaidBlock must register before StarterKit so its parseMarkdown for the
     // shared `code` token runs first and claims ```mermaid fences.
     MermaidBlock,
