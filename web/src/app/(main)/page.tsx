@@ -320,6 +320,16 @@ export default function Home() {
                   </span>{' '}
                   sync, and comments.
                 </p>
+                <div className="withmd-landing-cta withmd-landing-primary-cta">
+                  <button
+                    type="button"
+                    className="withmd-btn withmd-btn-landing"
+                    disabled={anonBusy}
+                    onClick={onOpenFilePicker}
+                  >
+                    Upload a markdown file
+                  </button>
+                </div>
 
                 <hr className="withmd-landing-rule withmd-landing-anon-divider" />
 
@@ -415,7 +425,7 @@ export default function Home() {
                       </Link>
                     ) : (
                       <button type="button" className="withmd-btn withmd-btn-landing" onClick={login}>
-                        Login with GitHub
+                        Connect GitHub repo
                       </button>
                     )}
                   </div>
@@ -462,7 +472,7 @@ export default function Home() {
                     className="withmd-landing-landscape-inline"
                     onClick={() => setLandscapeMode(true)}
                   >
-                    Oh, I&apos;m just here to enjoy the landscape.
+                    View background
                   </button>
                 </div>
               </div>
