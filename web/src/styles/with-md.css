@@ -1629,6 +1629,12 @@
   max-width: 760px;
 }
 
+.withmd-landing-pricing-note {
+  margin-top: 8px;
+  max-width: 760px;
+  color: color-mix(in srgb, var(--withmd-body) 84%, var(--withmd-text) 16%);
+}
+
 .withmd-landing-auth-cta {
   margin-top: 14px;
 }
