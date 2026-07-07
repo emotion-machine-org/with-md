@@ -846,18 +846,21 @@
 }
 
 .withmd-editor-scroll {
-  --withmd-editor-scrollbar-width: 0px;
-  --withmd-editor-scrollbar-extra-offset: 14px;
+  /* Reserve the vertical scrollbar's width on BOTH inline edges so the text stays
+     centered (equal left/right margins) with the bar parked in the right gutter —
+     whether or not a bar is visible, and for overlay or classic scrollbars alike.
+     Replaces an earlier negative-margin/padding compensation (driven by a measured
+     --withmd-editor-scrollbar-width) that squeezed the text on the right, or clipped
+     it, whenever Chrome rendered a layout-consuming scrollbar (forced by
+     scrollbar-color below). scrollbar-gutter makes the reservation exact, so no
+     measurement or per-view wiring is needed. */
   min-height: 0;
-  width: calc(100% + var(--withmd-editor-scrollbar-width) + var(--withmd-editor-scrollbar-extra-offset));
-  margin-right: calc(-1 * (var(--withmd-editor-scrollbar-width) + var(--withmd-editor-scrollbar-extra-offset)));
-  padding-left: 0;
-  padding-right: calc(var(--withmd-editor-scrollbar-width) + var(--withmd-editor-scrollbar-extra-offset));
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
@@ -884,7 +887,7 @@
 .withmd-editor-scroll .withmd-prose,
 .withmd-editor-scroll .ProseMirror {
   box-sizing: border-box;
-  width: calc(100% + var(--withmd-editor-scrollbar-width));
+  width: 100%;
   max-width: none;
 }
 
@@ -3387,7 +3390,7 @@
   position: relative;
   margin: 92px auto 0;
   width: 100%;
-  max-width: 780px;
+  max-width: 800px;
   min-height: 0;
   height: calc(var(--withmd-stage-height) - 92px);
   z-index: 3;
