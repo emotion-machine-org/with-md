@@ -884,7 +884,13 @@
 .withmd-editor-scroll .withmd-prose,
 .withmd-editor-scroll .ProseMirror {
   box-sizing: border-box;
-  width: calc(100% + var(--withmd-editor-scrollbar-width));
+  /* The scroll box is widened by (scrollbar-width + extra-offset) and pulled back
+     with a negative margin so the scrollbar parks in the right gutter. A layout-
+     consuming scrollbar (Chrome renders one because of scrollbar-color below) then
+     shrinks this element's percentage base by BOTH its padding-right and the
+     scrollbar, so the text must add both back to stay centered — otherwise it is
+     squeezed from the right by (scrollbar-width + extra-offset). */
+  width: calc(100% + (2 * var(--withmd-editor-scrollbar-width)) + var(--withmd-editor-scrollbar-extra-offset));
   max-width: none;
 }
 
