@@ -1,42 +1,45 @@
 import type { Metadata } from 'next';
 
 import AnonShareShell from '@/components/with-md/anon-share-shell';
+import { getAnonShareLinkPreview, LINK_PREVIEW_IMAGE_SIZE } from '@/lib/with-md/link-preview';
 
 interface Props {
   params: Promise<{ shareId: string }>;
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { shareId } = await params;
   const path = `/s/${encodeURIComponent(shareId)}`;
-  const description = 'Anonymous markdown sharing';
+  const preview = await getAnonShareLinkPreview(shareId);
 
   return {
-    title: 'with.md',
-    description,
+    title: preview.metaTitle,
+    description: preview.description,
     robots: {
       index: false,
       follow: false,
     },
     openGraph: {
       type: 'website',
-      title: 'with.md',
-      description,
+      title: preview.metaTitle,
+      description: preview.description,
       url: path,
       images: [
         {
-          url: '/with-md.jpg',
-          width: 1174,
-          height: 654,
-          alt: 'with.md',
+          url: preview.imagePath,
+          width: LINK_PREVIEW_IMAGE_SIZE.width,
+          height: LINK_PREVIEW_IMAGE_SIZE.height,
+          alt: preview.imageAlt,
         },
       ],
     },
     twitter: {
       card: 'summary_large_image',
-      title: 'with.md',
-      description,
-      images: ['/with-md.jpg'],
+      title: preview.metaTitle,
+      description: preview.description,
+      images: [preview.imagePath],
     },
   };
 }
