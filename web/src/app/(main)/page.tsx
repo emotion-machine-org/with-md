@@ -301,6 +301,7 @@ export default function Home() {
     ? 'Connect your Github repo'
     : 'Connect your Github repo';
   const authSubtitle = 'Collaborate live, push changes back. Your files, your repos. No lock-in, no proprietary formats.';
+  const pricingNote = 'Free to start. Share markdown without signup, then connect GitHub when you want repo-backed docs.';
 
   return (
     <main className={`withmd-bg withmd-page withmd-landing ${landingDropActive ? 'is-drop-active' : ''}`}>
@@ -406,6 +407,7 @@ export default function Home() {
                 <div className="withmd-landing-section withmd-landing-signin-section">
                   <p className="withmd-landing-h2 withmd-landing-auth-copy">{authHelper}</p>
                   <p className="withmd-landing-body withmd-landing-auth-subcopy">{authSubtitle}</p>
+                  <p className="withmd-landing-body withmd-landing-pricing-note">{pricingNote}</p>
                   <div className="withmd-landing-cta withmd-landing-auth-cta">
                     {loading ? (
                       <span className="withmd-muted-xs">Loading...</span>
