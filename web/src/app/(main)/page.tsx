@@ -309,7 +309,7 @@ export default function Home() {
           <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill">
             <div className="withmd-doc-scroll">
               <div className="withmd-landing-inner">
-                <h1 className="withmd-landing-title">Collaborate with.md files</h1>
+                <h1 className="withmd-landing-title">Markdown collaboration for developers and agents</h1>
                 <p className="withmd-landing-tagline">
                   Share and edit markdown files. With live cursors,{' '}
                   <span className="withmd-landing-animated-word">{animatedSyncWord}</span>
