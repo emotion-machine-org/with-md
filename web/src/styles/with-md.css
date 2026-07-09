@@ -1984,6 +1984,26 @@
   right: 0;
 }
 
+.withmd-share-create-own {
+  flex: 0 0 auto;
+  margin: 10px 0 0;
+  color: var(--withmd-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.withmd-share-create-own a {
+  color: var(--withmd-text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.withmd-share-create-own a:hover {
+  color: var(--withmd-accent);
+}
+
 .withmd-share-menu-wrap {
   position: relative;
 }

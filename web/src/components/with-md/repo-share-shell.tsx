@@ -467,6 +467,9 @@ export default function RepoShareShell({ token }: Props) {
               </div>
             )}
           </div>
+          <p className="withmd-share-create-own">
+            Want your own editable markdown link? <a href="/">Create one on with.md</a>.
+          </p>
         </div>
       </section>
     </main>
