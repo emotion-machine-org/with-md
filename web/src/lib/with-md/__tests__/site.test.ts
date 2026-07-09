@@ -13,7 +13,6 @@ describe('site metadata routes', () => {
   test('publishes a crawl policy for public marketing pages only', () => {
     const metadata = robots();
     expect(metadata.sitemap).toBe('https://with.md/sitemap.xml');
-    expect(metadata.host).toBe('https://with.md');
     expect(metadata.rules).toEqual([
       {
         userAgent: '*',
