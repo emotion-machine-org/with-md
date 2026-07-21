@@ -9,7 +9,7 @@ const privateFontsStylesheetUrl = process.env.WITHMD_PRIVATE_FONTS_STYLESHEET_UR
 const configuredGoogleAnalyticsId = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID?.trim() || 'G-YZB6FGJP9F';
 const googleAnalyticsMeasurementId = /^G-[A-Z0-9]+$/.test(configuredGoogleAnalyticsId) ? configuredGoogleAnalyticsId : '';
 const siteTitle = 'with.md - Markdown collaboration for developers and agents';
-const siteDescription = 'Share anonymous markdown links and collaborate on GitHub-backed docs with developers and agents.';
+const siteDescription = 'Create read and edit links for markdown files without moving the source file.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
