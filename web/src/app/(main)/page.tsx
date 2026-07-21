@@ -309,25 +309,64 @@ export default function Home() {
           <div className="withmd-panel withmd-doc-panel withmd-column withmd-fill">
             <div className="withmd-doc-scroll">
               <div className="withmd-landing-inner">
-                <h1 className="withmd-landing-title">Collaborate with.md files</h1>
+                <h1 className="withmd-landing-title">Shareable markdown links</h1>
                 <p className="withmd-landing-tagline">
-                  Share and edit markdown files. With live cursors,{' '}
+                  Turn one `.md` file into a read link for reviewers and an edit link for collaborators. The source stays clean while live cursors,{' '}
                   <span className="withmd-landing-animated-word">{animatedSyncWord}</span>
                   <span className="withmd-landing-cursor-inline withmd-landing-tagline-cursor" style={{ color: LANDING_ANIMATED_CURSOR_COLOR }}>
                     <span className="collaboration-cursor__caret" aria-hidden="true">
                       <span className="collaboration-cursor__label">{LANDING_ANIMATED_CURSOR_NAME}</span>
                     </span>
                   </span>{' '}
-                  sync, and comments.
+                  sync, and comments handle collaboration.
                 </p>
 
                 <hr className="withmd-landing-rule withmd-landing-anon-divider" />
 
+                <div className="withmd-landing-section withmd-landing-try-section">
+                  <h2 className="withmd-landing-h2">Try it with a markdown file</h2>
+                  <p className="withmd-landing-body withmd-landing-anon-copy">
+                    Start with the README demo, a blank file, or your own `.md` file. Send the read
+                    link when someone only needs to review. Send the edit link when they should make
+                    changes. Source mode keeps the raw markdown available, so the file can move back
+                    to your repo, notes app, or agent without becoming a proprietary doc.
+                  </p>
+                  <div className="withmd-landing-try-list" aria-label="Share link types">
+                    <div>
+                      <p className="withmd-landing-try-label">Read link</p>
+                      <p className="withmd-landing-try-copy">A clean browser page for review and sharing.</p>
+                    </div>
+                    <div>
+                      <p className="withmd-landing-try-label">Edit link</p>
+                      <p className="withmd-landing-try-copy">A private edit URL for comments and changes.</p>
+                    </div>
+                    <div>
+                      <p className="withmd-landing-try-label">Source preserved</p>
+                      <p className="withmd-landing-try-copy">Raw markdown stays available in source mode.</p>
+                    </div>
+                  </div>
+                  <div className="withmd-landing-try-actions">
+                    <Link href="/demo/readme" className="withmd-btn withmd-btn-landing">
+                      Try the README demo
+                    </Link>
+                    <button
+                      type="button"
+                      className="withmd-landing-create-blank"
+                      disabled={anonBusy}
+                      onClick={createBlankMarkdown}
+                    >
+                      Start with a blank markdown file
+                    </button>
+                  </div>
+                </div>
+
+                <hr className="withmd-landing-rule" />
+
                 <div className="withmd-landing-section withmd-landing-anon-section">
-                  <h2 className="withmd-landing-h2">Share markdown instantly </h2>
+                  <h2 className="withmd-landing-h2">Create a clean markdown share</h2>
                   <p className="withmd-landing-body withmd-landing-anon-copy">
                     Drag one `.md` file here, or upload manually. You get a read link and an edit
-                    link. ... or{' '}
+                    link without moving the source into another doc tool. ... or{' '}
                     <button
                       type="button"
                       className="withmd-landing-create-blank"
