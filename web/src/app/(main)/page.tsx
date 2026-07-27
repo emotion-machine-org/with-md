@@ -346,7 +346,7 @@ export default function Home() {
                   role="button"
                   tabIndex={anonBusy ? -1 : 0}
                   aria-disabled={anonBusy}
-                  aria-label="Upload markdown file"
+                  aria-label="Drag & Drop Your Markdown Files Into This Area to upload a markdown file"
                   onClick={onOpenFilePicker}
                   onKeyDown={(event) => {
                     if (anonBusy) return;
